@@ -22,7 +22,6 @@ export default function App() {
   const [proxyPort, setProxyPort] = useState<number | null>(null);
   const [view, setView] = useState<View>("all");
   const [clipsRefresh, setClipsRefresh] = useState(0);
-  const rbRef = useRef<RollingBuffer | null>(null);
   const [rb, setRb] = useState<RollingBuffer | null>(null);
   const searchTimer = useRef<number | null>(null);
 
@@ -141,7 +140,6 @@ export default function App() {
 
   const sampleLast = useCallback(
     async (seconds: number) => {
-      const rb = rbRef.current;
       if (!rb || !current) return;
       if (!settings.clipsDir) {
         pickDir();
@@ -165,7 +163,7 @@ export default function App() {
         console.error("sample failed", e);
       }
     },
-    [current, settings.clipsDir, pickDir]
+    [rb, current, settings.clipsDir, pickDir]
   );
 
   // Keyboard shortcuts
@@ -240,10 +238,7 @@ export default function App() {
             volume={settings.volume}
             bufferSeconds={settings.bufferSeconds}
             onVolumeChange={(v) => setSettings((s) => ({ ...s, volume: v }))}
-            onBufferReady={(b) => {
-              rbRef.current = b;
-              setRb(b);
-            }}
+            onBufferReady={setRb}
           />
 
           <SampleControls

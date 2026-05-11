@@ -15,9 +15,7 @@ pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             let http = reqwest::Client::builder()
                 .user_agent("RadioSampler/0.1")
@@ -38,7 +36,6 @@ pub fn run() {
             commands::save_clip,
             commands::list_clips,
             commands::delete_clip,
-            commands::read_clip,
             commands::open_clip_in_folder,
             commands::pick_clips_dir,
             commands::default_clips_dir,

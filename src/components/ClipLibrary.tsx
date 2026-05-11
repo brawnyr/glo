@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Clip } from "../types";
 import { invoke } from "../lib/tauri";
-import { CassetteSprite, PauseSprite, PlaySprite } from "../assets/pixel-sprites";
+import { CassetteSprite } from "../assets/pixel-sprites";
 
 type Props = {
   clipsDir: string | null;
@@ -20,59 +20,26 @@ type RawClip = {
 
 export default function ClipLibrary({ clipsDir, refreshKey, onPickDir }: Props) {
   const [clips, setClips] = useState<Clip[]>([]);
-  const [playing, setPlaying] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (!clipsDir) return;
+    setErr(null);
     invoke<RawClip[]>("list_clips", { dir: clipsDir })
-      .then((rows) => {
-        setClips(
-          rows.map((r) => ({
-            fileName: r.fileName,
-            path: r.path,
-            stationName: r.stationName,
-            durationSec: r.durationSec,
-            createdAt: r.createdAt,
-            sizeBytes: r.sizeBytes,
-          }))
-        );
-      })
-      .catch(() => setClips([]));
+      .then((rows) => setClips(rows as Clip[]))
+      .catch((e) => {
+        setClips([]);
+        setErr(String((e as Error)?.message || e));
+      });
   }, [clipsDir, refreshKey]);
-
-  const play = async (c: Clip) => {
-    if (playing === c.path) {
-      audioRef.current?.pause();
-      setPlaying(null);
-      return;
-    }
-    try {
-      const bytes = await invoke<number[]>("read_clip", { path: c.path });
-      const u8 = new Uint8Array(bytes);
-      const blob = new Blob([u8], { type: "audio/wav" });
-      const url = URL.createObjectURL(blob);
-      if (audioRef.current) {
-        audioRef.current.src = url;
-        await audioRef.current.play();
-        setPlaying(c.path);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
 
   const remove = async (c: Clip) => {
     if (!confirm(`delete ${c.fileName}?`)) return;
     try {
       await invoke("delete_clip", { path: c.path });
       setClips((cs) => cs.filter((x) => x.path !== c.path));
-      if (playing === c.path) {
-        audioRef.current?.pause();
-        setPlaying(null);
-      }
     } catch (e) {
-      console.error(e);
+      setErr(String((e as Error)?.message || e));
     }
   };
 
@@ -80,7 +47,7 @@ export default function ClipLibrary({ clipsDir, refreshKey, onPickDir }: Props) 
     try {
       await invoke("open_clip_in_folder", { path: c.path });
     } catch (e) {
-      console.error(e);
+      setErr(String((e as Error)?.message || e));
     }
   };
 
@@ -111,41 +78,32 @@ export default function ClipLibrary({ clipsDir, refreshKey, onPickDir }: Props) 
 
   return (
     <div className="flex-1 overflow-y-auto pr-1">
-      <audio
-        ref={audioRef}
-        onEnded={() => setPlaying(null)}
-        onError={() => setPlaying(null)}
-      />
+      {err && (
+        <div className="mb-2 px-2 py-1 font-mono text-xs text-crema-400 border border-crema-700 bg-roast-900">
+          {err}
+        </div>
+      )}
       <ul className="flex flex-col gap-2">
-        {clips.map((c) => {
-          const isPlaying = playing === c.path;
-          return (
-            <li
-              key={c.path}
-              className={`panel p-3 flex items-center gap-3 ${isPlaying ? "ring-2 ring-crema-500" : ""}`}
-            >
-              <button
-                onClick={() => play(c)}
-                className={`w-10 h-10 flex items-center justify-center border-2 border-roast-950 ${
-                  isPlaying ? "bg-crema-500 text-roast-900" : "bg-roast-700 text-cream-100"
-                }`}
-              >
-                {isPlaying ? <PauseSprite size={20} /> : <PlaySprite size={20} />}
+        {clips.map((c) => (
+          <li key={c.path} className="panel p-3 flex items-center gap-3">
+            <CassetteSprite size={28} />
+            <div className="flex-1 min-w-0">
+              <div className="font-display text-cream-100 truncate">{c.stationName}</div>
+              <div className="font-mono text-xs text-cream-400 truncate">
+                {new Date(c.createdAt).toLocaleString()} · {Math.round(c.durationSec)}s · {fmtSize(c.sizeBytes)}
+              </div>
+              <div className="font-mono text-[10px] text-cream-400/60 truncate">{c.fileName}</div>
+            </div>
+            <div className="flex gap-1">
+              <button onClick={() => reveal(c)} className="btn-pixel" title="show in file manager">
+                reveal
               </button>
-              <div className="flex-1 min-w-0">
-                <div className="font-display text-cream-100 truncate">{c.stationName}</div>
-                <div className="font-mono text-xs text-cream-400 truncate">
-                  {new Date(c.createdAt).toLocaleString()} · {Math.round(c.durationSec)}s · {fmtSize(c.sizeBytes)}
-                </div>
-                <div className="font-mono text-[10px] text-cream-400/60 truncate">{c.fileName}</div>
-              </div>
-              <div className="flex gap-1">
-                <button onClick={() => reveal(c)} className="btn-pixel">reveal</button>
-                <button onClick={() => remove(c)} className="btn-pixel">del</button>
-              </div>
-            </li>
-          );
-        })}
+              <button onClick={() => remove(c)} className="btn-pixel" title="delete file">
+                del
+              </button>
+            </div>
+          </li>
+        ))}
       </ul>
     </div>
   );

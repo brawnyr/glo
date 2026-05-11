@@ -31,12 +31,14 @@ export default function Player({ station, proxyPort, volume, bufferSeconds, onVo
   useEffect(() => {
     if (!audioRef.current) return;
     let cancelled = false;
+    let unsubLevel: (() => void) | null = null;
     const rb = new RollingBuffer(bufferSeconds);
     rb.attach(audioRef.current)
       .then(() => {
         if (cancelled) return;
         rb.setVolume(volume);
         rbRef.current = rb;
+        unsubLevel = rb.onLevel(setLevel);
         onBufferReady(rb);
       })
       .catch((e) => {
@@ -45,6 +47,7 @@ export default function Player({ station, proxyPort, volume, bufferSeconds, onVo
       });
     return () => {
       cancelled = true;
+      if (unsubLevel) unsubLevel();
       rb.destroy();
       if (rbRef.current === rb) rbRef.current = null;
     };
@@ -61,13 +64,6 @@ export default function Player({ station, proxyPort, volume, bufferSeconds, onVo
     rbRef.current?.setBufferSeconds(bufferSeconds);
   }, [bufferSeconds]);
 
-  // Wire level meter
-  useEffect(() => {
-    if (!rbRef.current) return;
-    const off = rbRef.current.onLevel(setLevel);
-    return off;
-  }, []);
-
   // Load + play when station changes
   useEffect(() => {
     const audio = audioRef.current;
@@ -82,6 +78,7 @@ export default function Player({ station, proxyPort, volume, bufferSeconds, onVo
     audio.src = streamUrl;
     setStatus("loading");
     setElapsed(0);
+    rbRef.current?.clear();
     // Need user gesture-y context resume; the click that triggered station-select is one
     rbRef.current?.resume();
     audio.play().catch((e) => {

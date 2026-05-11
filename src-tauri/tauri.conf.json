@@ -39,9 +39,5 @@
       "icons/icon.ico"
     ]
   },
-  "plugins": {
-    "fs": {
-      "requireLiteralLeadingDot": false
-    }
-  }
+  "plugins": {}
 }

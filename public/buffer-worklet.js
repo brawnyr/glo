@@ -55,6 +55,12 @@ class RollingBufferProcessor extends AudioWorkletProcessor {
       this.capacity = newCap;
       this.filled = keep;
       this.writeIdx = keep % newCap;
+    } else if (msg.type === "clear") {
+      this.filled = 0;
+      this.writeIdx = 0;
+      for (let c = 0; c < this.numChannels; c++) {
+        this.buffers[c].fill(0);
+      }
     } else if (msg.type === "snapshot") {
       const seconds = Math.max(0.5, msg.seconds || 30);
       const frames = Math.min(Math.floor(sampleRate * seconds), this.filled);

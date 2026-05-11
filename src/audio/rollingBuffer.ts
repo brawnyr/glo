@@ -11,6 +11,7 @@ export class RollingBuffer {
   private node: AudioWorkletNode | null = null;
   private src: MediaElementAudioSourceNode | null = null;
   private gain: GainNode | null = null;
+  private sink: GainNode | null = null;
   private analyser: AnalyserNode | null = null;
   private audioEl: HTMLAudioElement | null = null;
   private bufferSeconds: number;
@@ -66,15 +67,22 @@ export class RollingBuffer {
     gain.gain.value = 1;
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 256;
+    // Muted sink keeps the worklet's output connected to the graph so
+    // process() runs reliably across engines.
+    const sink = ctx.createGain();
+    sink.gain.value = 0;
 
-    // Audio path: src -> gain -> [worklet (buffer-only), analyser, destination]
+    // src -> gain -> [worklet -> muted sink -> destination, analyser, destination]
     src.connect(gain);
-    gain.connect(node); // worklet taps audio but its output isn't connected to anything audible
+    gain.connect(node);
+    node.connect(sink);
+    sink.connect(ctx.destination);
     gain.connect(analyser);
     gain.connect(ctx.destination);
 
     this.src = src;
     this.gain = gain;
+    this.sink = sink;
     this.node = node;
     this.analyser = analyser;
 
@@ -89,6 +97,10 @@ export class RollingBuffer {
   setBufferSeconds(seconds: number) {
     this.bufferSeconds = seconds;
     this.node?.port.postMessage({ type: "config", seconds });
+  }
+
+  clear() {
+    this.node?.port.postMessage({ type: "clear" });
   }
 
   setVolume(v: number) {
@@ -124,6 +136,7 @@ export class RollingBuffer {
       this.src?.disconnect();
       this.gain?.disconnect();
       this.node?.disconnect();
+      this.sink?.disconnect();
       this.analyser?.disconnect();
     } catch {
       // ignore
@@ -139,6 +152,7 @@ export class RollingBuffer {
     this.node = null;
     this.src = null;
     this.gain = null;
+    this.sink = null;
     this.analyser = null;
     this.audioEl = null;
     this.ready = false;

@@ -152,11 +152,6 @@ pub fn delete_clip(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn read_clip(path: String) -> Result<Vec<u8>, String> {
-    std::fs::read(&path).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 pub fn open_clip_in_folder(path: String) -> Result<(), String> {
     let p = Path::new(&path);
     let parent = p.parent().ok_or_else(|| "no parent dir".to_string())?;

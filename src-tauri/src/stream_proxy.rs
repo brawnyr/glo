@@ -41,20 +41,26 @@ fn cors_headers(resp: &mut Response<BoxedBody>) {
     );
 }
 
+fn full_body(bytes: Bytes) -> BoxedBody {
+    Full::new(bytes)
+        .map_err(|e: std::convert::Infallible| -> std::io::Error { match e {} })
+        .boxed()
+}
+
 fn empty(status: StatusCode) -> Response<BoxedBody> {
-    let body = Full::new(Bytes::new())
-        .map_err(|e| match e {})
-        .boxed();
-    let mut r = Response::builder().status(status).body(body).unwrap();
+    let mut r = Response::builder()
+        .status(status)
+        .body(full_body(Bytes::new()))
+        .unwrap();
     cors_headers(&mut r);
     r
 }
 
 fn text(status: StatusCode, msg: &str) -> Response<BoxedBody> {
-    let body = Full::new(Bytes::from(msg.to_owned()))
-        .map_err(|e| match e {})
-        .boxed();
-    let mut r = Response::builder().status(status).body(body).unwrap();
+    let mut r = Response::builder()
+        .status(status)
+        .body(full_body(Bytes::from(msg.to_owned())))
+        .unwrap();
     r.headers_mut()
         .insert("Content-Type", HeaderValue::from_static("text/plain"));
     cors_headers(&mut r);
