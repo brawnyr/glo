@@ -1,0 +1,179 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Pixelify+Sans:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --pixel: 2px;
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: #0f0a07;
+  /* image-rendering: pixelated; only applies to images */
+}
+
+/* Pixel-perfect borders */
+.pixel-border {
+  border-style: solid;
+  border-width: 2px;
+  border-image: none;
+  image-rendering: pixelated;
+}
+
+/* Coffee pour gradient with dithered noise overlay */
+.pour-bg {
+  background:
+    radial-gradient(ellipse at 50% -10%, rgba(217,127,60,0.18) 0%, transparent 55%),
+    radial-gradient(ellipse at 110% 110%, rgba(197,162,106,0.10) 0%, transparent 50%),
+    linear-gradient(180deg, #0f0a07 0%, #1a1410 60%, #241a14 100%);
+}
+
+/* Dithered cream-into-coffee bleed used at panel tops */
+.cream-bleed {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(244,232,208,0.10) 1px, transparent 1.4px);
+  background-size: 4px 4px;
+  mask-image: linear-gradient(180deg, black 0%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, black 0%, transparent 100%);
+}
+
+/* Subtle CRT scanlines for the player */
+.scanlines::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0,0,0,0.10) 0px,
+    rgba(0,0,0,0.10) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+
+/* Scrollbar tuned to the coffee palette */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #1a1410;
+}
+::-webkit-scrollbar-thumb {
+  background: #3a2a1c;
+  border: 2px solid #1a1410;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4a3624;
+}
+
+/* Buttons - pixel push effect */
+.btn-pixel {
+  @apply inline-flex items-center gap-2 px-3 py-2 font-pixel text-sm uppercase tracking-wider;
+  background: #2e2218;
+  color: #f4e8d0;
+  border: 2px solid #0f0a07;
+  box-shadow: 2px 2px 0 0 #0f0a07, inset 0 0 0 1px rgba(244,232,208,0.08);
+  transition: transform 60ms ease, box-shadow 60ms ease, background 120ms;
+  user-select: none;
+}
+.btn-pixel:hover:not(:disabled) {
+  background: #3a2a1c;
+}
+.btn-pixel:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 0 #0f0a07, inset 0 0 0 1px rgba(244,232,208,0.08);
+}
+.btn-pixel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-crema {
+  background: #d97f3c;
+  color: #1a1410;
+  border: 2px solid #0f0a07;
+  box-shadow: 2px 2px 0 0 #0f0a07;
+}
+.btn-crema:hover:not(:disabled) {
+  background: #e89556;
+}
+
+/* Card / panel */
+.panel {
+  background: linear-gradient(180deg, #241a14 0%, #1a1410 100%);
+  border: 2px solid #0f0a07;
+  box-shadow: 4px 4px 0 0 rgba(0,0,0,0.6), inset 0 0 0 1px rgba(244,232,208,0.06);
+}
+
+/* Now-playing crema glow */
+.now-playing-glow {
+  box-shadow:
+    0 0 24px rgba(217,127,60,0.35),
+    0 0 6px rgba(217,127,60,0.8),
+    4px 4px 0 0 rgba(0,0,0,0.6),
+    inset 0 0 0 1px rgba(232,213,176,0.15);
+}
+
+/* Pixel mug steam */
+.steam {
+  filter: blur(0.3px);
+  animation: steam 3.5s ease-in-out infinite;
+}
+.steam.s2 { animation-delay: 0.7s; }
+.steam.s3 { animation-delay: 1.4s; }
+
+/* Vinyl spin */
+.vinyl-spin {
+  animation: spin 4s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+/* Pixel input */
+.input-pixel {
+  background: #0f0a07;
+  color: #f4e8d0;
+  border: 2px solid #2e2218;
+  padding: 8px 10px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 13px;
+}
+.input-pixel:focus {
+  outline: none;
+  border-color: #d97f3c;
+  box-shadow: 0 0 0 1px #d97f3c, 0 0 8px rgba(217,127,60,0.35);
+}
+
+/* Tab */
+.tab {
+  @apply px-3 py-1.5 font-pixel text-xs uppercase tracking-widest cursor-pointer;
+  color: #c5a26a;
+  border-bottom: 2px solid transparent;
+}
+.tab.active {
+  color: #f4e8d0;
+  border-bottom-color: #d97f3c;
+}
+.tab:hover {
+  color: #f4e8d0;
+}
+
+/* Caret blink */
+.caret::after {
+  content: "_";
+  margin-left: 2px;
+  animation: blink 1.2s steps(2, end) infinite;
+}
