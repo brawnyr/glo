@@ -1,0 +1,158 @@
+import { useEffect, useRef, useState } from "react";
+import { Clip } from "../types";
+import { invoke } from "../lib/tauri";
+import { CassetteSprite, PauseSprite, PlaySprite } from "../assets/pixel-sprites";
+
+type Props = {
+  clipsDir: string | null;
+  refreshKey: number;
+  onPickDir: () => void;
+};
+
+type RawClip = {
+  fileName: string;
+  path: string;
+  stationName: string;
+  durationSec: number;
+  createdAt: number;
+  sizeBytes: number;
+};
+
+export default function ClipLibrary({ clipsDir, refreshKey, onPickDir }: Props) {
+  const [clips, setClips] = useState<Clip[]>([]);
+  const [playing, setPlaying] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (!clipsDir) return;
+    invoke<RawClip[]>("list_clips", { dir: clipsDir })
+      .then((rows) => {
+        setClips(
+          rows.map((r) => ({
+            fileName: r.fileName,
+            path: r.path,
+            stationName: r.stationName,
+            durationSec: r.durationSec,
+            createdAt: r.createdAt,
+            sizeBytes: r.sizeBytes,
+          }))
+        );
+      })
+      .catch(() => setClips([]));
+  }, [clipsDir, refreshKey]);
+
+  const play = async (c: Clip) => {
+    if (playing === c.path) {
+      audioRef.current?.pause();
+      setPlaying(null);
+      return;
+    }
+    try {
+      const bytes = await invoke<number[]>("read_clip", { path: c.path });
+      const u8 = new Uint8Array(bytes);
+      const blob = new Blob([u8], { type: "audio/wav" });
+      const url = URL.createObjectURL(blob);
+      if (audioRef.current) {
+        audioRef.current.src = url;
+        await audioRef.current.play();
+        setPlaying(c.path);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const remove = async (c: Clip) => {
+    if (!confirm(`delete ${c.fileName}?`)) return;
+    try {
+      await invoke("delete_clip", { path: c.path });
+      setClips((cs) => cs.filter((x) => x.path !== c.path));
+      if (playing === c.path) {
+        audioRef.current?.pause();
+        setPlaying(null);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const reveal = async (c: Clip) => {
+    try {
+      await invoke("open_clip_in_folder", { path: c.path });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  if (!clipsDir) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 text-cream-300">
+        <CassetteSprite size={64} />
+        <div className="font-display text-lg">no clips folder yet</div>
+        <div className="font-mono text-xs text-cream-400 max-w-md text-center">
+          choose where your samples should live and they'll appear here.
+        </div>
+        <button onClick={onPickDir} className="btn-pixel btn-crema mt-2">choose folder</button>
+      </div>
+    );
+  }
+
+  if (clips.length === 0) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-2 text-cream-300">
+        <CassetteSprite size={48} />
+        <div className="font-display text-lg">no clips saved yet</div>
+        <div className="font-mono text-xs text-cream-400">
+          press <kbd className="px-1 py-0 bg-roast-700 border border-roast-900">[</kbd> to save the last 30s while playing.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto pr-1">
+      <audio
+        ref={audioRef}
+        onEnded={() => setPlaying(null)}
+        onError={() => setPlaying(null)}
+      />
+      <ul className="flex flex-col gap-2">
+        {clips.map((c) => {
+          const isPlaying = playing === c.path;
+          return (
+            <li
+              key={c.path}
+              className={`panel p-3 flex items-center gap-3 ${isPlaying ? "ring-2 ring-crema-500" : ""}`}
+            >
+              <button
+                onClick={() => play(c)}
+                className={`w-10 h-10 flex items-center justify-center border-2 border-roast-950 ${
+                  isPlaying ? "bg-crema-500 text-roast-900" : "bg-roast-700 text-cream-100"
+                }`}
+              >
+                {isPlaying ? <PauseSprite size={20} /> : <PlaySprite size={20} />}
+              </button>
+              <div className="flex-1 min-w-0">
+                <div className="font-display text-cream-100 truncate">{c.stationName}</div>
+                <div className="font-mono text-xs text-cream-400 truncate">
+                  {new Date(c.createdAt).toLocaleString()} · {Math.round(c.durationSec)}s · {fmtSize(c.sizeBytes)}
+                </div>
+                <div className="font-mono text-[10px] text-cream-400/60 truncate">{c.fileName}</div>
+              </div>
+              <div className="flex gap-1">
+                <button onClick={() => reveal(c)} className="btn-pixel">reveal</button>
+                <button onClick={() => remove(c)} className="btn-pixel">del</button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function fmtSize(n: number) {
+  if (n < 1024) return `${n}B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)}MB`;
+}
