@@ -1,7 +1,7 @@
 // Main-thread interface to the rolling-buffer AudioWorklet.
 // Owns the AudioContext, the <audio> element source, and the worklet node.
 
-export type LevelData = { peak: number; rms: number };
+export type LevelData = { peak: number; rms: number; filled: number; capacity: number };
 export type Snapshot = { sampleRate: number; channels: Float32Array[] };
 
 type SnapshotResolver = (s: Snapshot) => void;
@@ -57,7 +57,12 @@ export class RollingBuffer {
           res({ sampleRate: msg.sampleRate, channels: msg.channels });
         }
       } else if (msg.type === "level") {
-        const data = { peak: msg.peak, rms: msg.rms };
+        const data = {
+          peak: msg.peak,
+          rms: msg.rms,
+          filled: msg.filled ?? 0,
+          capacity: msg.capacity ?? 0,
+        };
         this.levelListeners.forEach((fn) => fn(data));
       }
     };

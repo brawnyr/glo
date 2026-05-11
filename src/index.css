@@ -34,16 +34,34 @@ body {
 /* Coffee pour gradient with dithered noise overlay */
 .pour-bg {
   background:
-    radial-gradient(ellipse at 50% -10%, rgba(217,127,60,0.18) 0%, transparent 55%),
-    radial-gradient(ellipse at 110% 110%, rgba(197,162,106,0.10) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% -10%, rgba(217,127,60,0.22) 0%, transparent 55%),
+    radial-gradient(ellipse at 0% 80%, rgba(232,213,176,0.06) 0%, transparent 45%),
+    radial-gradient(ellipse at 110% 110%, rgba(197,162,106,0.12) 0%, transparent 50%),
     linear-gradient(180deg, #0f0a07 0%, #1a1410 60%, #241a14 100%);
 }
 
-/* Dithered cream-into-coffee bleed used at panel tops */
+/* Drifting cream haze — slow, atmospheric, behind everything */
+.haze {
+  background:
+    radial-gradient(circle at 18% 22%, rgba(244,232,208,0.07) 0%, transparent 22%),
+    radial-gradient(circle at 78% 38%, rgba(232,213,176,0.06) 0%, transparent 26%),
+    radial-gradient(circle at 40% 78%, rgba(217,127,60,0.06) 0%, transparent 24%);
+  filter: blur(40px);
+  animation: drift 22s ease-in-out infinite alternate;
+  mix-blend-mode: screen;
+}
+@keyframes drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(-2%, 1%, 0) scale(1.04); }
+  100% { transform: translate3d(2%, -1%, 0) scale(1.02); }
+}
+
+/* Dithered cream-into-coffee bleed used at panel tops — heavier than before */
 .cream-bleed {
   background-image:
-    radial-gradient(circle at 1px 1px, rgba(244,232,208,0.10) 1px, transparent 1.4px);
-  background-size: 4px 4px;
+    radial-gradient(circle at 1px 1px, rgba(244,232,208,0.16) 1px, transparent 1.4px),
+    radial-gradient(circle at 3px 2px, rgba(232,213,176,0.10) 1px, transparent 1.2px);
+  background-size: 4px 4px, 6px 5px;
   mask-image: linear-gradient(180deg, black 0%, transparent 100%);
   -webkit-mask-image: linear-gradient(180deg, black 0%, transparent 100%);
 }
@@ -119,13 +137,14 @@ body {
   box-shadow: 4px 4px 0 0 rgba(0,0,0,0.6), inset 0 0 0 1px rgba(244,232,208,0.06);
 }
 
-/* Now-playing crema glow */
+/* Now-playing crema glow — warmer, with a soft cream bloom inside */
 .now-playing-glow {
   box-shadow:
-    0 0 24px rgba(217,127,60,0.35),
-    0 0 6px rgba(217,127,60,0.8),
+    0 0 32px rgba(217,127,60,0.40),
+    0 0 8px rgba(217,127,60,0.85),
     4px 4px 0 0 rgba(0,0,0,0.6),
-    inset 0 0 0 1px rgba(232,213,176,0.15);
+    inset 0 0 24px rgba(244,232,208,0.06),
+    inset 0 0 0 1px rgba(232,213,176,0.18);
 }
 
 /* Pixel mug steam */
@@ -135,6 +154,68 @@ body {
 }
 .steam.s2 { animation-delay: 0.7s; }
 .steam.s3 { animation-delay: 1.4s; }
+
+/* Destructive button — used by ClipLibrary delete */
+.btn-del {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 30px;
+  background: #2e2218;
+  border: 2px solid #0f0a07;
+  box-shadow: 2px 2px 0 0 #0f0a07, inset 0 0 0 1px rgba(244,232,208,0.06);
+  transition: background 120ms, transform 60ms ease, box-shadow 60ms ease;
+  cursor: pointer;
+}
+.btn-del:hover {
+  background: #4a2418;
+}
+.btn-del:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 0 #0f0a07, inset 0 0 0 1px rgba(244,232,208,0.06);
+}
+
+/* Save splash — coffee drop ripple + drip */
+.splash {
+  position: absolute;
+  inset: 0;
+  width: 80px;
+  height: 80px;
+  border: 2px solid rgba(217, 127, 60, 0.8);
+  border-radius: 50%;
+  transform: scale(0.2);
+  opacity: 0.95;
+  animation: splash-ripple 800ms cubic-bezier(0.16, 0.84, 0.44, 1) forwards;
+  pointer-events: none;
+}
+.splash.splash-2 {
+  border-color: rgba(244, 232, 208, 0.55);
+  animation-delay: 140ms;
+}
+.splash-drop {
+  position: absolute;
+  left: 36px;
+  top: 36px;
+  width: 8px;
+  height: 8px;
+  background: #d97f3c;
+  border-radius: 50%;
+  filter: blur(0.6px);
+  box-shadow: 0 0 12px rgba(217,127,60,0.7);
+  transform: scale(1);
+  animation: splash-drop 700ms ease-out forwards;
+}
+@keyframes splash-ripple {
+  0%   { transform: scale(0.2); opacity: 0.95; }
+  60%  { opacity: 0.6; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+@keyframes splash-drop {
+  0%   { transform: scale(0.6); opacity: 0; }
+  20%  { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(2.6); opacity: 0; filter: blur(2px); }
+}
 
 /* Vinyl spin */
 .vinyl-spin {

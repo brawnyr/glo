@@ -1,32 +1,43 @@
-// Thin wrapper around Tauri invoke that survives running in plain browser dev.
+// Thin wrapper around Tauri invoke/event that survives running in plain browser dev.
 
 type InvokeFn = <T = unknown>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+type ListenFn = <T>(event: string, handler: (e: { payload: T }) => void) => Promise<() => void>;
 
 let invokeImpl: InvokeFn | null = null;
+let listenImpl: ListenFn | null = null;
 let initialized = false;
 
-async function ensure(): Promise<InvokeFn | null> {
-  if (initialized) return invokeImpl;
-  initialized = true;
-  try {
-    const isTauri = "__TAURI_INTERNALS__" in window || "__TAURI__" in window;
-    if (!isTauri) return null;
-    const mod = await import("@tauri-apps/api/core");
-    invokeImpl = mod.invoke as InvokeFn;
-  } catch {
-    invokeImpl = null;
+async function ensure(): Promise<{ invoke: InvokeFn | null; listen: ListenFn | null }> {
+  if (!initialized) {
+    initialized = true;
+    try {
+      const isTauriEnv = "__TAURI_INTERNALS__" in window || "__TAURI__" in window;
+      if (isTauriEnv) {
+        const core = await import("@tauri-apps/api/core");
+        const event = await import("@tauri-apps/api/event");
+        invokeImpl = core.invoke as InvokeFn;
+        listenImpl = event.listen as unknown as ListenFn;
+      }
+    } catch {
+      invokeImpl = null;
+      listenImpl = null;
+    }
   }
-  return invokeImpl;
+  return { invoke: invokeImpl, listen: listenImpl };
 }
 
 export async function invoke<T = unknown>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  const fn = await ensure();
-  if (!fn) {
-    throw new Error(`Tauri not available — cannot call ${cmd}`);
-  }
+  const { invoke: fn } = await ensure();
+  if (!fn) throw new Error(`Tauri not available — cannot call ${cmd}`);
   return fn<T>(cmd, args);
 }
 
+export async function listen<T>(event: string, handler: (e: { payload: T }) => void): Promise<() => void> {
+  const { listen: fn } = await ensure();
+  if (!fn) return () => {};
+  return fn<T>(event, handler);
+}
+
 export async function isTauri(): Promise<boolean> {
-  return (await ensure()) !== null;
+  return (await ensure()).invoke !== null;
 }

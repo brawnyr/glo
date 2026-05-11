@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { Clip } from "../types";
 import { invoke } from "../lib/tauri";
-import { CassetteSprite } from "../assets/pixel-sprites";
+import { CassetteSprite, TrashSprite } from "../assets/pixel-sprites";
 
 type Props = {
   clipsDir: string | null;
   refreshKey: number;
   onPickDir: () => void;
+  onChanged: () => void;
 };
 
 type RawClip = {
@@ -18,7 +19,7 @@ type RawClip = {
   sizeBytes: number;
 };
 
-export default function ClipLibrary({ clipsDir, refreshKey, onPickDir }: Props) {
+export default function ClipLibrary({ clipsDir, refreshKey, onPickDir, onChanged }: Props) {
   const [clips, setClips] = useState<Clip[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
@@ -38,6 +39,7 @@ export default function ClipLibrary({ clipsDir, refreshKey, onPickDir }: Props) 
     try {
       await invoke("delete_clip", { path: c.path });
       setClips((cs) => cs.filter((x) => x.path !== c.path));
+      onChanged();
     } catch (e) {
       setErr(String((e as Error)?.message || e));
     }
@@ -94,12 +96,17 @@ export default function ClipLibrary({ clipsDir, refreshKey, onPickDir }: Props) 
               </div>
               <div className="font-mono text-[10px] text-cream-400/60 truncate">{c.fileName}</div>
             </div>
-            <div className="flex gap-1">
+            <div className="flex gap-1 items-center">
               <button onClick={() => reveal(c)} className="btn-pixel" title="show in file manager">
                 reveal
               </button>
-              <button onClick={() => remove(c)} className="btn-pixel" title="delete file">
-                del
+              <button
+                onClick={() => remove(c)}
+                className="btn-del"
+                title="delete file"
+                aria-label="delete clip"
+              >
+                <TrashSprite size={18} />
               </button>
             </div>
           </li>

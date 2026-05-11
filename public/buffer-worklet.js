@@ -126,10 +126,16 @@ class RollingBufferProcessor extends AudioWorkletProcessor {
     this.levelFrames += frames;
     this.levelCounter += frames;
 
-    // Emit level roughly every 100ms
+    // Emit level + fill roughly every 100ms
     if (this.levelCounter >= sampleRate / 10) {
       const rms = Math.sqrt(this.levelSumSq / Math.max(1, this.levelFrames));
-      this.port.postMessage({ type: "level", peak: this.levelPeak, rms });
+      this.port.postMessage({
+        type: "level",
+        peak: this.levelPeak,
+        rms,
+        filled: this.filled,
+        capacity: this.capacity,
+      });
       this.levelCounter = 0;
       this.levelPeak = 0;
       this.levelSumSq = 0;

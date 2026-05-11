@@ -7,7 +7,7 @@ import ClipLibrary from "./components/ClipLibrary";
 import { searchStations, topStations, trackClick } from "./api/radioBrowser";
 import type { FilterState, Settings, Station } from "./types";
 import { loadSettings, saveSettings } from "./lib/settings";
-import { invoke, isTauri } from "./lib/tauri";
+import { invoke, isTauri, listen } from "./lib/tauri";
 import { RollingBuffer } from "./audio/rollingBuffer";
 import { MugSprite } from "./assets/pixel-sprites";
 
@@ -19,22 +19,21 @@ export default function App() {
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(false);
   const [current, setCurrent] = useState<Station | null>(null);
+  const [currentTrack, setCurrentTrack] = useState<string | null>(null);
   const [proxyPort, setProxyPort] = useState<number | null>(null);
   const [view, setView] = useState<View>("all");
   const [clipsRefresh, setClipsRefresh] = useState(0);
+  const [clipCount, setClipCount] = useState(0);
   const [rb, setRb] = useState<RollingBuffer | null>(null);
+  const [splash, setSplash] = useState<{ id: number; x: number; y: number } | null>(null);
   const searchTimer = useRef<number | null>(null);
 
-  // Persist settings
   useEffect(() => saveSettings(settings), [settings]);
 
-  // Get proxy port from Rust on startup
+  // Proxy port
   useEffect(() => {
     (async () => {
-      if (!(await isTauri())) {
-        setProxyPort(null);
-        return;
-      }
+      if (!(await isTauri())) return;
       try {
         const port = await invoke<number>("get_proxy_port");
         setProxyPort(port);
@@ -44,7 +43,7 @@ export default function App() {
     })();
   }, []);
 
-  // Ensure a default clips dir exists in Tauri mode
+  // Default clips dir
   useEffect(() => {
     (async () => {
       if (settings.clipsDir) return;
@@ -54,13 +53,52 @@ export default function App() {
         await invoke("ensure_dir", { path: dir });
         setSettings((s) => ({ ...s, clipsDir: dir }));
       } catch {
-        // ignore — user will pick manually
+        // ignore
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load initial stations
+  // Listen for ICY metadata updates from the Rust proxy
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    (async () => {
+      if (!(await isTauri())) return;
+      try {
+        unlisten = await listen<{ title: string }>("current-track", (e) => {
+          setCurrentTrack(e.payload?.title || null);
+        });
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
+
+  // Reset track when station changes
+  useEffect(() => {
+    setCurrentTrack(null);
+  }, [current?.stationuuid]);
+
+  // Refresh clip count when dir or refreshKey changes
+  useEffect(() => {
+    (async () => {
+      if (!settings.clipsDir || !(await isTauri())) {
+        setClipCount(0);
+        return;
+      }
+      try {
+        const n = await invoke<number>("count_clips", { dir: settings.clipsDir });
+        setClipCount(n);
+      } catch {
+        setClipCount(0);
+      }
+    })();
+  }, [settings.clipsDir, clipsRefresh]);
+
+  // Initial station list
   useEffect(() => {
     setLoading(true);
     topStations(80)
@@ -69,7 +107,7 @@ export default function App() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Re-search when filter changes (debounced)
+  // Re-search on filter change
   useEffect(() => {
     if (view !== "all") return;
     if (searchTimer.current) window.clearTimeout(searchTimer.current);
@@ -103,11 +141,8 @@ export default function App() {
   }, [filter, view]);
 
   const favoritesSet = useMemo(() => new Set(settings.favorites), [settings.favorites]);
-
   const visibleStations = useMemo(() => {
-    if (view === "favorites") {
-      return stations.filter((s) => favoritesSet.has(s.stationuuid));
-    }
+    if (view === "favorites") return stations.filter((s) => favoritesSet.has(s.stationuuid));
     return stations;
   }, [stations, view, favoritesSet]);
 
@@ -138,8 +173,20 @@ export default function App() {
     }
   }, []);
 
+  const triggerSplash = useCallback((ev?: { clientX: number; clientY: number }) => {
+    const id = Date.now() + Math.random();
+    setSplash({
+      id,
+      x: ev?.clientX ?? window.innerWidth / 2,
+      y: ev?.clientY ?? window.innerHeight / 2,
+    });
+    window.setTimeout(() => {
+      setSplash((s) => (s && s.id === id ? null : s));
+    }, 900);
+  }, []);
+
   const sampleLast = useCallback(
-    async (seconds: number) => {
+    async (seconds: number, fromEvent?: { clientX: number; clientY: number }) => {
       if (!rb || !current) return;
       if (!settings.clipsDir) {
         pickDir();
@@ -154,19 +201,21 @@ export default function App() {
           args: {
             dir: settings.clipsDir,
             stationName: current.name,
+            trackTitle: currentTrack || "",
             durationSec: snap.channels[0].length / snap.sampleRate,
             bytes: Array.from(wav),
           },
         });
+        triggerSplash(fromEvent);
         setClipsRefresh((n) => n + 1);
       } catch (e) {
         console.error("sample failed", e);
       }
     },
-    [rb, current, settings.clipsDir, pickDir]
+    [rb, current, currentTrack, settings.clipsDir, pickDir, triggerSplash]
   );
 
-  // Keyboard shortcuts
+  // Keyboard
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
@@ -197,13 +246,14 @@ export default function App() {
   }, [sampleLast]);
 
   return (
-    <div className="h-screen w-screen flex flex-col pour-bg">
+    <div className="h-screen w-screen flex flex-col pour-bg relative overflow-hidden">
+      {/* Drifting cream haze — atmospheric, very subtle */}
+      <div className="haze pointer-events-none absolute inset-0 opacity-60" />
+
       {/* Title bar */}
-      <header className="relative px-4 py-2 flex items-center gap-3 border-b border-roast-900">
+      <header className="relative px-4 py-2 flex items-center gap-3 border-b border-roast-900 z-10">
         <MugSprite size={24} />
-        <div className="font-display text-cream-100 text-lg leading-none">
-          Radio Sampler
-        </div>
+        <div className="font-display text-cream-100 text-lg leading-none">Radio Sampler</div>
         <div className="font-pixel text-[10px] uppercase tracking-widest text-cream-400 leading-none">
           · pour something good
         </div>
@@ -216,12 +266,9 @@ export default function App() {
             }}
           />
         </div>
-        <div className="font-pixel text-[10px] uppercase tracking-widest text-cream-400">
-          {proxyPort ? `proxy :${proxyPort}` : "proxy offline"}
-        </div>
       </header>
 
-      <div className="flex-1 flex min-h-0">
+      <div className="flex-1 flex min-h-0 relative z-10">
         <Sidebar
           filter={filter}
           onChange={setFilter}
@@ -229,6 +276,8 @@ export default function App() {
           onShowFavorites={() => setView("favorites")}
           onShowLibrary={() => setView("library")}
           view={view}
+          clipCount={clipCount}
+          favoriteCount={settings.favorites.length}
         />
 
         <main className="flex-1 flex flex-col min-w-0 p-3 gap-3">
@@ -237,6 +286,7 @@ export default function App() {
             proxyPort={proxyPort}
             volume={settings.volume}
             bufferSeconds={settings.bufferSeconds}
+            currentTrack={currentTrack}
             onVolumeChange={(v) => setSettings((s) => ({ ...s, volume: v }))}
             onBufferReady={setRb}
           />
@@ -248,7 +298,7 @@ export default function App() {
             bufferSeconds={settings.bufferSeconds}
             onBufferSecondsChange={(n) => setSettings((s) => ({ ...s, bufferSeconds: n }))}
             onPickDir={pickDir}
-            onSaved={() => setClipsRefresh((n) => n + 1)}
+            onSample={(seconds, ev) => sampleLast(seconds, ev)}
           />
 
           <section className="flex-1 panel p-3 flex flex-col min-h-0 relative">
@@ -258,7 +308,7 @@ export default function App() {
                 {view === "library" ? "clip library" : view === "favorites" ? "favorites" : "stations"}
               </div>
               <div className="font-mono text-[10px] text-cream-400">
-                {view !== "library" ? `${visibleStations.length} stations` : ""}
+                {view !== "library" ? `${visibleStations.length} stations` : `${clipCount} clips`}
               </div>
               <div className="ml-auto font-mono text-[10px] text-cream-400">
                 <kbd className="px-1 bg-roast-800 border border-roast-900">space</kbd> play/pause ·{" "}
@@ -269,7 +319,12 @@ export default function App() {
             </div>
 
             {view === "library" ? (
-              <ClipLibrary clipsDir={settings.clipsDir} refreshKey={clipsRefresh} onPickDir={pickDir} />
+              <ClipLibrary
+                clipsDir={settings.clipsDir}
+                refreshKey={clipsRefresh}
+                onPickDir={pickDir}
+                onChanged={() => setClipsRefresh((n) => n + 1)}
+              />
             ) : (
               <StationList
                 stations={visibleStations}
@@ -285,7 +340,20 @@ export default function App() {
       </div>
 
       {/* dithered bottom strip - cream bleeding from below */}
-      <div className="h-1 bg-gradient-to-t from-roast-700 to-transparent" />
+      <div className="relative z-10 h-2 bg-gradient-to-t from-roast-700 via-roast-800/60 to-transparent" />
+
+      {/* Save splash — coffee drop ripple */}
+      {splash && (
+        <div
+          key={splash.id}
+          className="pointer-events-none fixed z-50"
+          style={{ left: splash.x - 40, top: splash.y - 40 }}
+        >
+          <div className="splash splash-1" />
+          <div className="splash splash-2" />
+          <div className="splash-drop" />
+        </div>
+      )}
     </div>
   );
 }

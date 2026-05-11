@@ -9,9 +9,20 @@ type Props = {
   onShowLibrary: () => void;
   onShowAll: () => void;
   view: "all" | "favorites" | "library";
+  clipCount: number;
+  favoriteCount: number;
 };
 
-export default function Sidebar({ filter, onChange, onShowFavorites, onShowLibrary, onShowAll, view }: Props) {
+export default function Sidebar({
+  filter,
+  onChange,
+  onShowFavorites,
+  onShowLibrary,
+  onShowAll,
+  view,
+  clipCount,
+  favoriteCount,
+}: Props) {
   const [countries, setCountries] = useState<{ name: string; stationcount: number }[]>([]);
   const [languages, setLanguages] = useState<{ name: string; stationcount: number }[]>([]);
   const [tags, setTags] = useState<{ name: string; stationcount: number }[]>([]);
@@ -25,9 +36,7 @@ export default function Sidebar({ filter, onChange, onShowFavorites, onShowLibra
         setLanguages(l.filter((x) => x.stationcount > 20).sort((a, b) => b.stationcount - a.stationcount));
         setTags(t);
       })
-      .catch(() => {
-        // ignore — UI still works
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -38,9 +47,17 @@ export default function Sidebar({ filter, onChange, onShowFavorites, onShowLibra
       <div>
         <div className="font-pixel text-xs uppercase tracking-widest text-cream-300 mb-2">Browse</div>
         <div className="flex flex-col gap-1">
-          <NavBtn active={view === "all"} onClick={onShowAll}>All stations</NavBtn>
-          <NavBtn active={view === "favorites"} onClick={onShowFavorites}>Favorites</NavBtn>
-          <NavBtn active={view === "library"} onClick={onShowLibrary}>Clip library</NavBtn>
+          <NavBtn active={view === "all"} onClick={onShowAll}>
+            <span>All stations</span>
+          </NavBtn>
+          <NavBtn active={view === "favorites"} onClick={onShowFavorites}>
+            <span>Favorites</span>
+            {favoriteCount > 0 && <Pill>{favoriteCount}</Pill>}
+          </NavBtn>
+          <NavBtn active={view === "library"} onClick={onShowLibrary}>
+            <span>Clip library</span>
+            {clipCount > 0 && <Pill>{clipCount}</Pill>}
+          </NavBtn>
         </div>
       </div>
 
@@ -93,12 +110,22 @@ export default function Sidebar({ filter, onChange, onShowFavorites, onShowLibra
   );
 }
 
-function NavBtn({ children, active, onClick }: { children: React.ReactNode; active: boolean; onClick: () => void }) {
+function NavBtn({
+  children,
+  active,
+  onClick,
+}: {
+  children: React.ReactNode;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
-      className={`text-left px-2 py-1.5 font-pixel text-sm uppercase tracking-wider transition-colors ${
-        active ? "bg-roast-700 text-cream-100 border-l-2 border-crema-500" : "text-cream-300 hover:text-cream-100 border-l-2 border-transparent"
+      className={`flex items-center justify-between text-left px-2 py-1.5 font-pixel text-sm uppercase tracking-wider transition-colors ${
+        active
+          ? "bg-roast-700 text-cream-100 border-l-2 border-crema-500"
+          : "text-cream-300 hover:text-cream-100 border-l-2 border-transparent"
       }`}
     >
       {children}
@@ -106,7 +133,23 @@ function NavBtn({ children, active, onClick }: { children: React.ReactNode; acti
   );
 }
 
-function TagChip({ children, active, onClick }: { children: React.ReactNode; active: boolean; onClick: () => void }) {
+function Pill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="ml-2 px-1.5 py-0 text-[10px] font-mono text-roast-900 bg-cream-300 border border-roast-900 leading-tight">
+      {children}
+    </span>
+  );
+}
+
+function TagChip({
+  children,
+  active,
+  onClick,
+}: {
+  children: React.ReactNode;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
