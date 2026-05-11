@@ -125,6 +125,24 @@ export function PauseSprite({ size = 24, className }: SpriteProps) {
   );
 }
 
+export function TrashSprite({ size = 18, className }: SpriteProps) {
+  const c = "#e89556";
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" className={className} style={crisp}>
+      {/* lid */}
+      <rect x="4" y="2" width="8" height="1" fill={c} />
+      <rect x="2" y="3" width="12" height="2" fill={c} />
+      {/* body */}
+      <rect x="3" y="5" width="10" height="9" fill={c} />
+      <rect x="3" y="14" width="10" height="1" fill="#8a4a1f" />
+      {/* vertical stripes (cutouts) */}
+      <rect x="5" y="7" width="1" height="6" fill="#1a1410" />
+      <rect x="8" y="7" width="1" height="6" fill="#1a1410" />
+      <rect x="11" y="7" width="1" height="6" fill="#1a1410" />
+    </svg>
+  );
+}
+
 export function HeartSprite({ size = 16, filled = false, className }: SpriteProps & { filled?: boolean }) {
   const c = filled ? "#d97f3c" : "#c5a26a";
   return (

@@ -78,6 +78,8 @@ pub struct SaveClipArgs {
     pub dir: String,
     #[serde(rename = "stationName")]
     pub station_name: String,
+    #[serde(rename = "trackTitle", default)]
+    pub track_title: String,
     #[serde(rename = "durationSec")]
     pub duration_sec: f32,
     pub bytes: Vec<u8>,
@@ -89,7 +91,15 @@ pub fn save_clip(args: SaveClipArgs) -> Result<ClipMetaJs, String> {
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let ts = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
     let safe_station = sanitize(&args.station_name);
-    let file_name = format!("{ts}__{safe_station}__{:.0}s.wav", args.duration_sec);
+    let file_name = if args.track_title.trim().is_empty() {
+        format!("{ts}__{safe_station}__{:.0}s.wav", args.duration_sec)
+    } else {
+        let safe_track = sanitize(&args.track_title);
+        format!(
+            "{ts}__{safe_station}__{safe_track}__{:.0}s.wav",
+            args.duration_sec
+        )
+    };
     let path = dir.join(&file_name);
     std::fs::write(&path, &args.bytes).map_err(|e| e.to_string())?;
     let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
@@ -102,6 +112,26 @@ pub fn save_clip(args: SaveClipArgs) -> Result<ClipMetaJs, String> {
         size_bytes: size,
     }
     .into())
+}
+
+#[tauri::command]
+pub fn count_clips(dir: String) -> Result<usize, String> {
+    let p = Path::new(&dir);
+    if !p.exists() {
+        return Ok(0);
+    }
+    let n = std::fs::read_dir(p)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path()
+                .extension()
+                .and_then(|s| s.to_str())
+                .map(|s| s == "wav")
+                .unwrap_or(false)
+        })
+        .count();
+    Ok(n)
 }
 
 #[tauri::command]
@@ -191,14 +221,20 @@ fn sanitize(s: &str) -> String {
 }
 
 fn parse_meta_from_filename(name: &str) -> (String, f32) {
-    // expected: YYYY-MM-DD_HH-MM-SS__<station>__<N>s.wav
+    // expected: YYYY-MM-DD_HH-MM-SS__<station>[__<track>]__<N>s.wav
     let stem = name.strip_suffix(".wav").unwrap_or(name);
     let parts: Vec<&str> = stem.split("__").collect();
     if parts.len() >= 3 {
         let dur_str = parts[parts.len() - 1].trim_end_matches('s');
         let dur: f32 = dur_str.parse().unwrap_or(0.0);
-        let station = parts[1..parts.len() - 1].join("__").replace('-', " ");
-        return (station, dur);
+        let station = parts[1].replace('-', " ");
+        let display = if parts.len() >= 4 {
+            let track = parts[2..parts.len() - 1].join("__").replace('-', " ");
+            format!("{station} — {track}")
+        } else {
+            station
+        };
+        return (display, dur);
     }
     (stem.to_string(), 0.0)
 }

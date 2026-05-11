@@ -2,7 +2,10 @@ mod commands;
 mod stream_proxy;
 
 use std::sync::Arc;
-use tauri::Manager;
+
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{TrayIconBuilder, TrayIconEvent};
+use tauri::{Manager, WindowEvent};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -21,20 +24,61 @@ pub fn run() {
                 .user_agent("RadioSampler/0.1")
                 .build()
                 .expect("reqwest client");
-            // Launch the local stream proxy on a random free port
-            let (port, handle) = stream_proxy::spawn(http.clone());
+            let (port, handle) = stream_proxy::spawn(http.clone(), app.handle().clone());
             log::info!("stream proxy listening on http://127.0.0.1:{port}");
-            // keep the handle alive for the lifetime of the app
             std::mem::forget(handle);
 
             let state = AppState { http, proxy_port: port };
             app.manage(Arc::new(state));
+
+            // System tray: keeps audio playing when the window is hidden.
+            let show_item = MenuItem::with_id(app, "show", "Show window", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Quit Radio Sampler", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+            let mut tray_builder = TrayIconBuilder::new()
+                .menu(&menu)
+                .tooltip("Radio Sampler")
+                .show_menu_on_left_click(false);
+            if let Some(icon) = app.default_window_icon().cloned() {
+                tray_builder = tray_builder.icon(icon);
+            }
+            let _tray = tray_builder
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.set_focus();
+                        }
+                    }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click { .. } = event {
+                        if let Some(w) = tray.app_handle().get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
+
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                // Hide instead of closing so audio keeps playing.
+                api.prevent_close();
+                let _ = window.hide();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_proxy_port,
             commands::save_clip,
             commands::list_clips,
+            commands::count_clips,
             commands::delete_clip,
             commands::open_clip_in_folder,
             commands::pick_clips_dir,
