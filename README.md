@@ -1,6 +1,6 @@
 # Radio Sampler
 
-> init, basic idea is to scan radio from all over the globe and generate loops that i find tasteful.
+> init, basic idea is listen to radio from around the world, if you here something you want to record, you can retro actively record
 
 A desktop radio app with a **rolling 60s buffer** — when something cool plays, hit `[` or `]` and you keep the last 30 s / 60 s as a WAV. Coffee-pour pixel aesthetic (Animal-Well-ish — modern type, pixel-perfect sprites).
 
