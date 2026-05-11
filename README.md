@@ -1,1 +1,1 @@
-init, basic idea is to scan radio from all over the globe and generate loops that i find tasteful.
+init, basic idea is listen to radio from around the world, if you here something you want to record, you can retro actively record it to use when creating music 
