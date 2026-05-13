@@ -285,7 +285,6 @@ export default function App() {
             station={current}
             proxyPort={proxyPort}
             volume={settings.volume}
-            bufferSeconds={settings.bufferSeconds}
             currentTrack={currentTrack}
             onVolumeChange={(v) => setSettings((s) => ({ ...s, volume: v }))}
             onBufferReady={setRb}
@@ -295,8 +294,6 @@ export default function App() {
             rb={rb}
             station={current}
             clipsDir={settings.clipsDir}
-            bufferSeconds={settings.bufferSeconds}
-            onBufferSecondsChange={(n) => setSettings((s) => ({ ...s, bufferSeconds: n }))}
             onPickDir={pickDir}
             onSample={(seconds, ev) => sampleLast(seconds, ev)}
           />

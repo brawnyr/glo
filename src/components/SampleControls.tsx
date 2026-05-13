@@ -7,8 +7,6 @@ type Props = {
   rb: RollingBuffer | null;
   station: Station | null;
   clipsDir: string | null;
-  bufferSeconds: number;
-  onBufferSecondsChange: (n: number) => void;
   onPickDir: () => void;
   onSample: (seconds: number, fromEvent?: { clientX: number; clientY: number }) => void;
 };
@@ -17,8 +15,6 @@ export default function SampleControls({
   rb,
   station,
   clipsDir,
-  bufferSeconds,
-  onBufferSecondsChange,
   onPickDir,
   onSample,
 }: Props) {
@@ -38,24 +34,9 @@ export default function SampleControls({
             <button
               key={n}
               onClick={(e) => sample(n, e)}
-              disabled={!rb || !station || n > bufferSeconds}
+              disabled={!rb || !station}
               className="btn-pixel btn-crema"
-              title={n > bufferSeconds ? `buffer is only ${bufferSeconds}s` : `save the last ${n}s`}
-            >
-              {n}s
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="ml-3 flex flex-col relative">
-        <div className="font-pixel text-[10px] uppercase tracking-widest text-cream-400">buffer size</div>
-        <div className="flex items-center gap-1 mt-1">
-          {[30, 60, 90, 120].map((n) => (
-            <button
-              key={n}
-              onClick={() => onBufferSecondsChange(n)}
-              className={`btn-pixel ${bufferSeconds === n ? "ring-2 ring-crema-500" : ""}`}
+              title={`save the last ${n}s`}
             >
               {n}s
             </button>

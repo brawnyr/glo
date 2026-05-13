@@ -1,11 +1,11 @@
 // Rolling-buffer AudioWorklet processor.
-// Maintains a circular buffer of the last N seconds of stereo PCM at the
-// current AudioContext sample rate. On request, posts a contiguous copy of
-// the last `seconds` of audio back to the main thread.
+// Maintains a fixed 60s circular buffer of stereo PCM at the current
+// AudioContext sample rate. On request, posts a contiguous copy of the
+// last `seconds` of audio back to the main thread.
 //
 // Messages in:
-//   { type: "config", seconds: number }
 //   { type: "snapshot", seconds: number, requestId: string }
+//   { type: "clear" }
 // Messages out:
 //   { type: "ready", sampleRate, bufferFrames }
 //   { type: "snapshot", requestId, sampleRate, channels: Float32Array[] }
@@ -38,24 +38,7 @@ class RollingBufferProcessor extends AudioWorkletProcessor {
 
   onMessage(msg) {
     if (!msg || typeof msg !== "object") return;
-    if (msg.type === "config") {
-      const seconds = Math.max(1, Math.min(120, msg.seconds || 60));
-      const newCap = Math.ceil(sampleRate * seconds);
-      // Resize: keep most-recent samples up to min(filled, newCap)
-      const keep = Math.min(this.filled, newCap);
-      const out = [new Float32Array(newCap), new Float32Array(newCap)];
-      const startFilled = this.filled < this.capacity ? 0 : this.writeIdx;
-      for (let c = 0; c < this.numChannels; c++) {
-        for (let i = 0; i < keep; i++) {
-          const srcIdx = (startFilled + (this.filled - keep) + i + this.capacity) % this.capacity;
-          out[c][i] = this.buffers[c][srcIdx];
-        }
-      }
-      this.buffers = out;
-      this.capacity = newCap;
-      this.filled = keep;
-      this.writeIdx = keep % newCap;
-    } else if (msg.type === "clear") {
+    if (msg.type === "clear") {
       this.filled = 0;
       this.writeIdx = 0;
       for (let c = 0; c < this.numChannels; c++) {

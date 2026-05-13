@@ -28,7 +28,6 @@ export type Clip = {
 export type Settings = {
   clipsDir: string | null;
   favorites: string[]; // station uuids
-  bufferSeconds: number; // 60 default
   volume: number; // 0-1
 };
 

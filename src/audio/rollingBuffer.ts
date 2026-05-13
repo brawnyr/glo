@@ -1,6 +1,8 @@
 // Main-thread interface to the rolling-buffer AudioWorklet.
 // Owns the AudioContext, the <audio> element source, and the worklet node.
 
+export const BUFFER_SECONDS = 60;
+
 export type LevelData = { peak: number; rms: number; filled: number; capacity: number };
 export type Snapshot = { sampleRate: number; channels: Float32Array[] };
 
@@ -14,15 +16,10 @@ export class RollingBuffer {
   private sink: GainNode | null = null;
   private analyser: AnalyserNode | null = null;
   private audioEl: HTMLAudioElement | null = null;
-  private bufferSeconds: number;
   private snapshotResolvers = new Map<string, SnapshotResolver>();
   private levelListeners = new Set<(d: LevelData) => void>();
   private readyResolvers: Array<() => void> = [];
   private ready = false;
-
-  constructor(bufferSeconds = 60) {
-    this.bufferSeconds = bufferSeconds;
-  }
 
   async attach(audioEl: HTMLAudioElement) {
     if (this.audioEl === audioEl && this.ctx) return;
@@ -41,7 +38,7 @@ export class RollingBuffer {
       numberOfInputs: 1,
       numberOfOutputs: 1,
       outputChannelCount: [2],
-      processorOptions: { seconds: this.bufferSeconds },
+      processorOptions: { seconds: BUFFER_SECONDS },
     });
 
     node.port.onmessage = (e) => {
@@ -97,11 +94,6 @@ export class RollingBuffer {
   private waitReady(): Promise<void> {
     if (this.ready) return Promise.resolve();
     return new Promise((resolve) => this.readyResolvers.push(resolve));
-  }
-
-  setBufferSeconds(seconds: number) {
-    this.bufferSeconds = seconds;
-    this.node?.port.postMessage({ type: "config", seconds });
   }
 
   clear() {

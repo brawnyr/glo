@@ -5,7 +5,6 @@ const KEY = "radio-sampler:settings";
 const DEFAULTS: Settings = {
   clipsDir: null,
   favorites: [],
-  bufferSeconds: 60,
   volume: 0.85,
 };
 

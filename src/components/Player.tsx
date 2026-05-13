@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Station } from "../types";
-import { LevelData, RollingBuffer } from "../audio/rollingBuffer";
+import { BUFFER_SECONDS, LevelData, RollingBuffer } from "../audio/rollingBuffer";
 import { PauseSprite, PlaySprite } from "../assets/pixel-sprites";
 
 type Status = "idle" | "loading" | "playing" | "paused" | "error";
@@ -9,7 +9,6 @@ type Props = {
   station: Station | null;
   proxyPort: number | null;
   volume: number;
-  bufferSeconds: number;
   currentTrack: string | null;
   onVolumeChange: (v: number) => void;
   onBufferReady: (rb: RollingBuffer) => void;
@@ -19,7 +18,6 @@ export default function Player({
   station,
   proxyPort,
   volume,
-  bufferSeconds,
   currentTrack,
   onVolumeChange,
   onBufferReady,
@@ -41,7 +39,7 @@ export default function Player({
     if (!audioRef.current) return;
     let cancelled = false;
     let unsubLevel: (() => void) | null = null;
-    const rb = new RollingBuffer(bufferSeconds);
+    const rb = new RollingBuffer();
     rb.attach(audioRef.current)
       .then(() => {
         if (cancelled) return;
@@ -66,10 +64,6 @@ export default function Player({
   useEffect(() => {
     rbRef.current?.setVolume(volume);
   }, [volume]);
-
-  useEffect(() => {
-    rbRef.current?.setBufferSeconds(bufferSeconds);
-  }, [bufferSeconds]);
 
   // Load + play on station change
   useEffect(() => {
@@ -116,7 +110,7 @@ export default function Player({
   };
 
   const fillFrac = level.capacity > 0 ? Math.min(1, level.filled / level.capacity) : 0;
-  const capSec = bufferSeconds;
+  const capSec = BUFFER_SECONDS;
   const fillSec = capSec * fillFrac;
 
   return (
