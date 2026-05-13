@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Station } from "../types";
 import { LevelData, RollingBuffer } from "../audio/rollingBuffer";
-import { MugSprite, PauseSprite, PlaySprite, VinylSprite } from "../assets/pixel-sprites";
+import { PauseSprite, PlaySprite } from "../assets/pixel-sprites";
 
 type Status = "idle" | "loading" | "playing" | "paused" | "error";
 
@@ -26,7 +26,6 @@ export default function Player({
 }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rbRef = useRef<RollingBuffer | null>(null);
-  const haloCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [level, setLevel] = useState<LevelData>({ peak: 0, rms: 0, filled: 0, capacity: 0 });
@@ -100,66 +99,6 @@ export default function Player({
     return () => clearInterval(t);
   }, [status]);
 
-  // Audio-reactive halo: pulls FFT bins from the AnalyserNode and paints a
-  // soft cream-into-coffee bloom around the vinyl.
-  useEffect(() => {
-    const canvas = haloCanvasRef.current;
-    const rb = rbRef.current;
-    if (!canvas || !rb) return;
-    const analyser = rb.getAnalyser();
-    if (!analyser) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const bins = new Uint8Array(analyser.frequencyBinCount);
-    let raf = 0;
-    let smoothed = 0;
-
-    const render = () => {
-      raf = requestAnimationFrame(render);
-      analyser.getByteFrequencyData(bins);
-      // Average lower half of the spectrum (where radio energy lives).
-      let sum = 0;
-      const range = Math.floor(bins.length * 0.6);
-      for (let i = 0; i < range; i++) sum += bins[i];
-      const avg = sum / range / 255; // 0..1
-      smoothed += (avg - smoothed) * 0.18;
-
-      const w = canvas.width;
-      const h = canvas.height;
-      ctx.clearRect(0, 0, w, h);
-      const cx = w / 2;
-      const cy = h / 2;
-      const base = Math.min(w, h) * 0.36;
-      const radius = base + smoothed * base * 0.55;
-
-      // crema glow
-      const g = ctx.createRadialGradient(cx, cy, base * 0.4, cx, cy, radius);
-      g.addColorStop(0, `rgba(232, 149, 86, ${0.05 + smoothed * 0.55})`);
-      g.addColorStop(0.55, `rgba(217, 127, 60, ${0.04 + smoothed * 0.25})`);
-      g.addColorStop(1, "rgba(217, 127, 60, 0)");
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-
-      // ring of frequency bars (8 spokes) for a coffee-swirl feel
-      const spokes = 24;
-      for (let i = 0; i < spokes; i++) {
-        const bin = bins[Math.floor((i / spokes) * range)] / 255;
-        const a = (i / spokes) * Math.PI * 2;
-        const r1 = base * 0.9;
-        const r2 = base * 0.9 + bin * base * 0.7;
-        ctx.beginPath();
-        ctx.strokeStyle = `rgba(244, 232, 208, ${0.08 + bin * 0.35})`;
-        ctx.lineWidth = 1.2;
-        ctx.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
-        ctx.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2);
-        ctx.stroke();
-      }
-    };
-    raf = requestAnimationFrame(render);
-    return () => cancelAnimationFrame(raf);
-    // Re-run when the rb identity changes (i.e. once attached)
-  }, [status, level.capacity]);
-
   const togglePlay = async () => {
     const audio = audioRef.current;
     if (!audio || !streamUrl) return;
@@ -198,23 +137,6 @@ export default function Player({
         onPlaying={() => setStatus("playing")}
       />
       <div className="relative flex items-center gap-4">
-        <div className="relative w-24 h-24 shrink-0">
-          {/* audio-reactive halo */}
-          <canvas
-            ref={haloCanvasRef}
-            width={192}
-            height={192}
-            className="absolute inset-0 w-full h-full pointer-events-none"
-            style={{ filter: "blur(0.5px)" }}
-          />
-          <div className="relative w-full h-full flex items-center justify-center">
-            <VinylSprite size={72} spinning={status === "playing"} />
-          </div>
-          <div className="absolute -bottom-1 -right-1">
-            <MugSprite size={26} />
-          </div>
-        </div>
-
         <div className="flex-1 min-w-0">
           <div className="font-pixel text-[10px] uppercase tracking-widest text-crema-400 flex items-center gap-2">
             {statusLabel(status)}
