@@ -18,3 +18,6 @@ src-tauri/gen
 # Logs
 *.log
 npm-debug.log*
+
+# Saved clips (test artifacts when clipsDir defaults inside the repo)
+saved_samples/
