@@ -6,6 +6,7 @@
 // Messages in:
 //   { type: "snapshot", seconds: number, requestId: string }
 //   { type: "clear" }
+//   { type: "paused", paused: boolean }
 // Messages out:
 //   { type: "ready", sampleRate, bufferFrames }
 //   { type: "snapshot", requestId, sampleRate, channels: Float32Array[] }
@@ -23,6 +24,7 @@ class RollingBufferProcessor extends AudioWorkletProcessor {
     ];
     this.writeIdx = 0;
     this.filled = 0; // frames filled so far (capped at capacity)
+    this.paused = true; // start paused so we don't capture silence pre-play
     this.levelCounter = 0;
     this.levelPeak = 0;
     this.levelSumSq = 0;
@@ -44,6 +46,8 @@ class RollingBufferProcessor extends AudioWorkletProcessor {
       for (let c = 0; c < this.numChannels; c++) {
         this.buffers[c].fill(0);
       }
+    } else if (msg.type === "paused") {
+      this.paused = !!msg.paused;
     } else if (msg.type === "snapshot") {
       const seconds = Math.max(0.5, msg.seconds || 30);
       const frames = Math.min(Math.floor(sampleRate * seconds), this.filled);
@@ -74,6 +78,8 @@ class RollingBufferProcessor extends AudioWorkletProcessor {
   }
 
   process(inputs) {
+    if (this.paused) return true;
+
     const input = inputs[0];
     if (!input || input.length === 0) return true;
 

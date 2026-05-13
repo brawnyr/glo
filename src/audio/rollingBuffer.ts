@@ -100,6 +100,10 @@ export class RollingBuffer {
     this.node?.port.postMessage({ type: "clear" });
   }
 
+  setPaused(paused: boolean) {
+    this.node?.port.postMessage({ type: "paused", paused });
+  }
+
   setVolume(v: number) {
     if (this.gain) this.gain.gain.value = v;
   }

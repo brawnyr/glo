@@ -65,6 +65,12 @@ export default function Player({
     rbRef.current?.setVolume(volume);
   }, [volume]);
 
+  // Freeze the rolling buffer whenever audio isn't actively playing, so we
+  // don't capture silence (paused, loading/stalled, error, or pre-play).
+  useEffect(() => {
+    rbRef.current?.setPaused(status !== "playing");
+  }, [status]);
+
   // Load + play on station change
   useEffect(() => {
     const audio = audioRef.current;
