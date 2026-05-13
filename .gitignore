@@ -21,3 +21,6 @@ npm-debug.log*
 
 # Saved clips (test artifacts when clipsDir defaults inside the repo)
 saved_samples/
+
+# Icon preview workspace (scratch SVGs/PNGs while picking an app icon)
+icon-candidates/
