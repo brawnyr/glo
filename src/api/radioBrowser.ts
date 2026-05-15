@@ -80,6 +80,109 @@ export async function topStations(limit = 60): Promise<Station[]> {
   return (await r.json()) as Station[];
 }
 
+// Curated taste profile: trap, heavy, jazz, classic rock / psych, electronic, lofi, soul.
+// Each bucket is one or more radio-browser tags fetched independently, then merged with
+// a round-robin so the top of the feed always shows genre variety.
+const TASTE_BUCKETS: { bucket: string; tags: string[] }[] = [
+  { bucket: "trap", tags: ["trap", "hip hop", "rap", "drill"] },
+  { bucket: "heavy", tags: ["metal", "heavy metal", "hard rock", "stoner rock", "doom metal"] },
+  { bucket: "jazz", tags: ["jazz", "smooth jazz", "bebop", "jazz fusion"] },
+  { bucket: "classic", tags: ["classic rock", "psychedelic rock", "blues rock", "60s", "70s"] },
+  { bucket: "blues", tags: ["blues"] },
+  { bucket: "electronic", tags: ["electronic", "house", "techno", "drum and bass", "edm", "ambient"] },
+  { bucket: "lofi", tags: ["lofi", "lo-fi", "chillhop", "chillout"] },
+  { bucket: "soul", tags: ["soul", "funk", "rnb", "neo soul", "motown"] },
+];
+
+// Tags / name fragments that mark a station as non-music; dropped from the recommended feed.
+const BLOCKED_TAG_SUBSTRINGS = [
+  "talk", "news", "religious", "religion", "christian", "gospel", "islam", "islamic",
+  "quran", "qur'an", "catholic", "bible", "sermon", "preach", "ministry", "spiritual",
+  "podcast", "sports", "politics", "weather", "traffic", "evangel",
+];
+const BLOCKED_NAME_RE =
+  /\b(talk|news|qur'?an|gospel|christian|catholic|bible|sermon|ministry|evangel|preach|islam|hadith|allah|jesus)\b/i;
+
+function isMusicStation(s: Station): boolean {
+  if (!s.lastcheckok) return false;
+  const tags = (s.tags || "").toLowerCase();
+  for (const bad of BLOCKED_TAG_SUBSTRINGS) {
+    if (tags.includes(bad)) return false;
+  }
+  if (BLOCKED_NAME_RE.test(s.name || "")) return false;
+  return true;
+}
+
+async function searchByTag(base: string, tag: string, limit: number): Promise<Station[]> {
+  const body = new URLSearchParams();
+  body.set("tag", tag);
+  body.set("hidebroken", "true");
+  body.set("limit", String(limit));
+  body.set("order", "votes");
+  body.set("reverse", "true");
+  try {
+    const r = await fetch(`${base}/json/stations/search`, {
+      method: "POST",
+      headers: HEADERS,
+      body: body.toString(),
+    });
+    if (!r.ok) return [];
+    return (await r.json()) as Station[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Recommended stations tuned to a music-leaning taste profile.
+ * Pulls per-bucket pools in parallel, filters talk/news/religious stations,
+ * and round-robins across buckets so the top of the list isn't all one genre.
+ */
+export async function recommendedStations(limit = 80): Promise<Station[]> {
+  const base = await pickMirror();
+  const perTag = 25;
+
+  const bucketResults = await Promise.all(
+    TASTE_BUCKETS.map(async (b) => {
+      const pools = await Promise.all(b.tags.map((t) => searchByTag(base, t, perTag)));
+      const seen = new Set<string>();
+      const merged: Station[] = [];
+      for (const pool of pools) {
+        for (const s of pool) {
+          if (seen.has(s.stationuuid)) continue;
+          if (!isMusicStation(s)) continue;
+          seen.add(s.stationuuid);
+          merged.push(s);
+        }
+      }
+      merged.sort(
+        (a, b) => (b.votes ?? 0) - (a.votes ?? 0) || (b.bitrate ?? 0) - (a.bitrate ?? 0)
+      );
+      return merged;
+    })
+  );
+
+  // Round-robin across buckets to keep the top of the feed varied.
+  const picked = new Set<string>();
+  const out: Station[] = [];
+  let added = true;
+  let idx = 0;
+  while (added && out.length < limit) {
+    added = false;
+    for (const bucket of bucketResults) {
+      const next = bucket[idx];
+      if (!next) continue;
+      if (picked.has(next.stationuuid)) continue;
+      picked.add(next.stationuuid);
+      out.push(next);
+      added = true;
+      if (out.length >= limit) break;
+    }
+    idx++;
+  }
+  return out;
+}
+
 export async function listCountries(): Promise<{ name: string; stationcount: number }[]> {
   const base = await pickMirror();
   const r = await fetch(`${base}/json/countries`, { headers: HEADERS });
