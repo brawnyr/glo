@@ -160,22 +160,34 @@ pub fn delete_clip(path: String) -> Result<(), String> {
 #[tauri::command]
 pub fn open_clip_in_folder(path: String) -> Result<(), String> {
     let p = Path::new(&path);
-    let parent = p.parent().ok_or_else(|| "no parent dir".to_string())?;
-    open_path(parent.to_str().unwrap_or("."))
-}
-
-fn open_path(p: &str) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open").arg(p).spawn().map_err(|e| e.to_string())?;
+    if !p.exists() {
+        return Err(format!("clip not found: {path}"));
     }
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("explorer").arg(p).spawn().map_err(|e| e.to_string())?;
+        // `/select,<path>` opens the parent folder and highlights the file.
+        // The comma is part of the flag — explorer parses the whole thing as one arg.
+        std::process::Command::new("explorer")
+            .arg(format!("/select,{}", p.display()))
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(p)
+            .spawn()
+            .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "linux")]
     {
-        std::process::Command::new("xdg-open").arg(p).spawn().map_err(|e| e.to_string())?;
+        // Most Linux file managers don't have a portable "reveal" flag — open the parent.
+        let parent = p.parent().ok_or_else(|| "no parent dir".to_string())?;
+        std::process::Command::new("xdg-open")
+            .arg(parent)
+            .spawn()
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }

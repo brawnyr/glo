@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import StationList from "./components/StationList";
-import Player from "./components/Player";
+import Player, { PlayerHandle } from "./components/Player";
 import SampleControls from "./components/SampleControls";
 import ClipLibrary from "./components/ClipLibrary";
 import { recommendedStations, searchStations, trackClick } from "./api/radioBrowser";
@@ -9,6 +9,7 @@ import type { FilterState, Settings, Station } from "./types";
 import { loadSettings, saveSettings } from "./lib/settings";
 import { invoke, isTauri, listen } from "./lib/tauri";
 import { RollingBuffer } from "./audio/rollingBuffer";
+import { useClipSampler } from "./hooks/useClipSampler";
 import { MugSprite } from "./assets/pixel-sprites";
 
 type View = "all" | "favorites" | "library";
@@ -27,6 +28,7 @@ export default function App() {
   const [rb, setRb] = useState<RollingBuffer | null>(null);
   const [splash, setSplash] = useState<{ id: number; x: number; y: number } | null>(null);
   const searchTimer = useRef<number | null>(null);
+  const playerRef = useRef<PlayerHandle | null>(null);
 
   useEffect(() => saveSettings(settings), [settings]);
 
@@ -58,19 +60,24 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    let unlisten: (() => void) | null = null;
+    let cancelled = false;
+    let unlistenFn: (() => void) | null = null;
     (async () => {
       if (!(await isTauri())) return;
+      if (cancelled) return;
       try {
-        unlisten = await listen<{ title: string }>("current-track", (e) => {
+        const u = await listen<{ title: string }>("current-track", (e) => {
           setCurrentTrack(e.payload?.title || null);
         });
+        if (cancelled) u();
+        else unlistenFn = u;
       } catch {
         // ignore
       }
     })();
     return () => {
-      if (unlisten) unlisten();
+      cancelled = true;
+      unlistenFn?.();
     };
   }, []);
 
@@ -179,35 +186,22 @@ export default function App() {
     }, 900);
   }, []);
 
-  const sampleLast = useCallback(
-    async (seconds: number, fromEvent?: { clientX: number; clientY: number }) => {
-      if (!rb || !current) return;
-      if (!settings.clipsDir) {
-        pickDir();
-        return;
-      }
-      try {
-        const snap = await rb.snapshot(seconds);
-        if (snap.channels[0].length === 0) return;
-        const { encodeWav } = await import("./audio/wavEncoder");
-        const wav = encodeWav(snap.channels, snap.sampleRate);
-        await invoke("save_clip", {
-          args: {
-            dir: settings.clipsDir,
-            stationName: current.name,
-            trackTitle: currentTrack || "",
-            durationSec: snap.channels[0].length / snap.sampleRate,
-            bytes: Array.from(wav),
-          },
-        });
-        triggerSplash(fromEvent);
-        setClipsRefresh((n) => n + 1);
-      } catch (e) {
-        console.error("sample failed", e);
-      }
+  const onClipSaved = useCallback(
+    (fromEvent?: { clientX: number; clientY: number }) => {
+      triggerSplash(fromEvent);
+      setClipsRefresh((n) => n + 1);
     },
-    [rb, current, currentTrack, settings.clipsDir, pickDir, triggerSplash]
+    [triggerSplash]
   );
+
+  const { sample: sampleLast } = useClipSampler({
+    rb,
+    station: current,
+    currentTrack,
+    clipsDir: settings.clipsDir,
+    onMissingDir: pickDir,
+    onClipSaved,
+  });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -215,11 +209,7 @@ export default function App() {
       if (tag === "input" || tag === "select" || tag === "textarea") return;
       if (e.key === " ") {
         e.preventDefault();
-        const audio = document.querySelector("audio");
-        if (audio) {
-          if (audio.paused) audio.play().catch(() => {});
-          else audio.pause();
-        }
+        playerRef.current?.toggle();
       } else if (e.key === "[") {
         e.preventDefault();
         sampleLast(30);
@@ -273,6 +263,7 @@ export default function App() {
 
         <main className="flex-1 flex flex-col min-w-0 p-3 gap-3">
           <Player
+            ref={playerRef}
             station={current}
             proxyPort={proxyPort}
             volume={settings.volume}

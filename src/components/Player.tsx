@@ -1,9 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Station } from "../types";
 import { BUFFER_SECONDS, LevelData, RollingBuffer } from "../audio/rollingBuffer";
 import { PauseSprite, PlaySprite } from "../assets/pixel-sprites";
 
 type Status = "idle" | "loading" | "playing" | "paused" | "error";
+
+export type PlayerHandle = {
+  play: () => Promise<void>;
+  pause: () => void;
+  toggle: () => Promise<void>;
+};
 
 type Props = {
   station: Station | null;
@@ -14,14 +20,17 @@ type Props = {
   onBufferReady: (rb: RollingBuffer) => void;
 };
 
-export default function Player({
-  station,
-  proxyPort,
-  volume,
-  currentTrack,
-  onVolumeChange,
-  onBufferReady,
-}: Props) {
+const Player = forwardRef<PlayerHandle, Props>(function Player(
+  {
+    station,
+    proxyPort,
+    volume,
+    currentTrack,
+    onVolumeChange,
+    onBufferReady,
+  },
+  ref
+) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rbRef = useRef<RollingBuffer | null>(null);
   const [status, setStatus] = useState<Status>("idle");
@@ -113,6 +122,31 @@ export default function Player({
     }
   };
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      play: async () => {
+        const audio = audioRef.current;
+        if (!audio || !streamUrl) return;
+        if (!audio.paused) return;
+        await rbRef.current?.resume();
+        try {
+          await audio.play();
+        } catch (e) {
+          setStatus("error");
+          setError(String((e as Error).message));
+        }
+      },
+      pause: () => {
+        const audio = audioRef.current;
+        if (!audio) return;
+        if (!audio.paused) audio.pause();
+      },
+      toggle: togglePlay,
+    }),
+    [streamUrl]
+  );
+
   const fillFrac = level.capacity > 0 ? Math.min(1, level.filled / level.capacity) : 0;
   const capSec = BUFFER_SECONDS;
   const fillSec = capSec * fillFrac;
@@ -195,7 +229,9 @@ export default function Player({
       )}
     </div>
   );
-}
+});
+
+export default Player;
 
 function statusLabel(s: Status): string {
   switch (s) {
