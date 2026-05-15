@@ -30,7 +30,6 @@ export default function App() {
 
   useEffect(() => saveSettings(settings), [settings]);
 
-  // Proxy port
   useEffect(() => {
     (async () => {
       if (!(await isTauri())) return;
@@ -43,7 +42,6 @@ export default function App() {
     })();
   }, []);
 
-  // Default clips dir
   useEffect(() => {
     (async () => {
       if (settings.clipsDir) return;
@@ -59,7 +57,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Listen for ICY metadata updates from the Rust proxy
   useEffect(() => {
     let unlisten: (() => void) | null = null;
     (async () => {
@@ -77,12 +74,10 @@ export default function App() {
     };
   }, []);
 
-  // Reset track when station changes
   useEffect(() => {
     setCurrentTrack(null);
   }, [current?.stationuuid]);
 
-  // Refresh clip count when dir or refreshKey changes
   useEffect(() => {
     (async () => {
       if (!settings.clipsDir || !(await isTauri())) {
@@ -98,7 +93,6 @@ export default function App() {
     })();
   }, [settings.clipsDir, clipsRefresh]);
 
-  // Initial station list — curated music recommendations, not raw top-vote.
   useEffect(() => {
     setLoading(true);
     recommendedStations(80)
@@ -107,7 +101,6 @@ export default function App() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Re-search on filter change
   useEffect(() => {
     if (view !== "all") return;
     if (searchTimer.current) window.clearTimeout(searchTimer.current);
@@ -173,6 +166,7 @@ export default function App() {
     }
   }, []);
 
+
   const triggerSplash = useCallback((ev?: { clientX: number; clientY: number }) => {
     const id = Date.now() + Math.random();
     setSplash({
@@ -215,7 +209,6 @@ export default function App() {
     [rb, current, currentTrack, settings.clipsDir, pickDir, triggerSplash]
   );
 
-  // Keyboard
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
@@ -247,10 +240,8 @@ export default function App() {
 
   return (
     <div className="h-screen w-screen flex flex-col pour-bg relative overflow-hidden">
-      {/* Drifting cream haze — atmospheric, very subtle */}
       <div className="haze pointer-events-none absolute inset-0 opacity-60" />
 
-      {/* Title bar */}
       <header className="relative px-4 py-2 flex items-center gap-3 border-b border-roast-900 z-10">
         <MugSprite size={24} />
         <div className="font-display text-cream-100 text-lg leading-none">Glo</div>
@@ -336,10 +327,8 @@ export default function App() {
         </main>
       </div>
 
-      {/* dithered bottom strip - cream bleeding from below */}
       <div className="relative z-10 h-2 bg-gradient-to-t from-roast-700 via-roast-800/60 to-transparent" />
 
-      {/* Save splash — coffee drop ripple */}
       {splash && (
         <div
           key={splash.id}

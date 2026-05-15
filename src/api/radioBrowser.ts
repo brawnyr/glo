@@ -1,7 +1,6 @@
 import type { Station } from "../types";
 
-// radio-browser.info has multiple mirror servers. Pick one at startup
-// and stick with it (recommended pattern from their docs).
+// radio-browser.info recommends picking a mirror at startup and sticking with it.
 const MIRRORS = [
   "https://de1.api.radio-browser.info",
   "https://at1.api.radio-browser.info",
@@ -12,11 +11,10 @@ let chosen: string | null = null;
 
 async function pickMirror(): Promise<string> {
   if (chosen) return chosen;
-  // Try each mirror in a randomized order
   const shuffled = [...MIRRORS].sort(() => Math.random() - 0.5);
   for (const base of shuffled) {
     try {
-      const r = await fetch(`${base}/json/stats`, { method: "GET" });
+      const r = await fetch(`${base}/json/stats`);
       if (r.ok) {
         chosen = base;
         return base;
@@ -25,7 +23,6 @@ async function pickMirror(): Promise<string> {
       // try next
     }
   }
-  // fallback — let the call fail visibly
   chosen = MIRRORS[0];
   return chosen;
 }
@@ -71,18 +68,8 @@ export async function searchStations(params: SearchParams): Promise<Station[]> {
   return (await r.json()) as Station[];
 }
 
-export async function topStations(limit = 60): Promise<Station[]> {
-  const base = await pickMirror();
-  const r = await fetch(`${base}/json/stations/topvote/${limit}`, {
-    headers: HEADERS,
-  });
-  if (!r.ok) throw new Error(`topvote ${r.status}`);
-  return (await r.json()) as Station[];
-}
-
-// Curated taste profile: trap, heavy, jazz, classic rock / psych, electronic, lofi, soul.
-// Each bucket is one or more radio-browser tags fetched independently, then merged with
-// a round-robin so the top of the feed always shows genre variety.
+// Each bucket is fetched independently then round-robin merged so the top of
+// the feed always shows genre variety instead of one tag dominating.
 const TASTE_BUCKETS: { bucket: string; tags: string[] }[] = [
   { bucket: "trap", tags: ["trap", "hip hop", "rap", "drill"] },
   { bucket: "heavy", tags: ["metal", "heavy metal", "hard rock", "stoner rock", "doom metal"] },
@@ -94,7 +81,7 @@ const TASTE_BUCKETS: { bucket: string; tags: string[] }[] = [
   { bucket: "soul", tags: ["soul", "funk", "rnb", "neo soul", "motown"] },
 ];
 
-// Tags / name fragments that mark a station as non-music; dropped from the recommended feed.
+// Non-music markers — dropped from the recommended feed.
 const BLOCKED_TAG_SUBSTRINGS = [
   "talk", "news", "religious", "religion", "christian", "gospel", "islam", "islamic",
   "quran", "qur'an", "catholic", "bible", "sermon", "preach", "ministry", "spiritual",
@@ -133,11 +120,6 @@ async function searchByTag(base: string, tag: string, limit: number): Promise<St
   }
 }
 
-/**
- * Recommended stations tuned to a music-leaning taste profile.
- * Pulls per-bucket pools in parallel, filters talk/news/religious stations,
- * and round-robins across buckets so the top of the list isn't all one genre.
- */
 export async function recommendedStations(limit = 80): Promise<Station[]> {
   const base = await pickMirror();
   const perTag = 25;
@@ -162,7 +144,6 @@ export async function recommendedStations(limit = 80): Promise<Station[]> {
     })
   );
 
-  // Round-robin across buckets to keep the top of the feed varied.
   const picked = new Set<string>();
   const out: Station[] = [];
   let added = true;
@@ -206,12 +187,12 @@ export async function listTopTags(limit = 80): Promise<{ name: string; stationco
   return r.json();
 }
 
-/** Ping radio-browser to let them know a station was clicked (non-fatal). */
+// Click ping — radio-browser uses these to rank popular stations.
 export async function trackClick(uuid: string): Promise<void> {
   try {
     const base = await pickMirror();
     await fetch(`${base}/json/url/${uuid}`, { headers: HEADERS });
   } catch {
-    // ignore — analytics ping only
+    // best-effort
   }
 }

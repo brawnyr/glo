@@ -7,6 +7,7 @@ use tauri::State;
 use crate::AppState;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct ClipMeta {
     pub file_name: String,
     pub path: String,
@@ -14,30 +15,6 @@ pub struct ClipMeta {
     pub duration_sec: f32,
     pub created_at: i64,
     pub size_bytes: u64,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct ClipMetaJs {
-    pub file_name: String,
-    pub path: String,
-    pub station_name: String,
-    pub duration_sec: f32,
-    pub created_at: i64,
-    pub size_bytes: u64,
-}
-
-impl From<ClipMeta> for ClipMetaJs {
-    fn from(m: ClipMeta) -> Self {
-        ClipMetaJs {
-            file_name: m.file_name,
-            path: m.path,
-            station_name: m.station_name,
-            duration_sec: m.duration_sec,
-            created_at: m.created_at,
-            size_bytes: m.size_bytes,
-        }
-    }
 }
 
 #[tauri::command]
@@ -86,7 +63,7 @@ pub struct SaveClipArgs {
 }
 
 #[tauri::command]
-pub fn save_clip(args: SaveClipArgs) -> Result<ClipMetaJs, String> {
+pub fn save_clip(args: SaveClipArgs) -> Result<ClipMeta, String> {
     let dir = PathBuf::from(&args.dir);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let ts = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
@@ -110,8 +87,7 @@ pub fn save_clip(args: SaveClipArgs) -> Result<ClipMetaJs, String> {
         duration_sec: args.duration_sec,
         created_at: chrono::Local::now().timestamp_millis(),
         size_bytes: size,
-    }
-    .into())
+    })
 }
 
 #[tauri::command]
@@ -135,12 +111,12 @@ pub fn count_clips(dir: String) -> Result<usize, String> {
 }
 
 #[tauri::command]
-pub fn list_clips(dir: String) -> Result<Vec<ClipMetaJs>, String> {
+pub fn list_clips(dir: String) -> Result<Vec<ClipMeta>, String> {
     let p = Path::new(&dir);
     if !p.exists() {
         return Ok(Vec::new());
     }
-    let mut out: Vec<ClipMetaJs> = Vec::new();
+    let mut out: Vec<ClipMeta> = Vec::new();
     for entry in std::fs::read_dir(p).map_err(|e| e.to_string())? {
         let entry = match entry {
             Ok(e) => e,
@@ -163,7 +139,7 @@ pub fn list_clips(dir: String) -> Result<Vec<ClipMetaJs>, String> {
             .map(|d| d.as_millis() as i64)
             .unwrap_or(0);
         let (station_name, duration_sec) = parse_meta_from_filename(&file_name);
-        out.push(ClipMetaJs {
+        out.push(ClipMeta {
             file_name,
             path: path.to_string_lossy().to_string(),
             station_name,
@@ -220,8 +196,8 @@ fn sanitize(s: &str) -> String {
     cleaned.trim_matches('-').chars().take(60).collect()
 }
 
+// expects: YYYY-MM-DD_HH-MM-SS__<station>[__<track>]__<N>s.wav
 fn parse_meta_from_filename(name: &str) -> (String, f32) {
-    // expected: YYYY-MM-DD_HH-MM-SS__<station>[__<track>]__<N>s.wav
     let stem = name.strip_suffix(".wav").unwrap_or(name);
     let parts: Vec<&str> = stem.split("__").collect();
     if parts.len() >= 3 {

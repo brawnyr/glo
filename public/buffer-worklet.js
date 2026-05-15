@@ -1,16 +1,11 @@
-// Rolling-buffer AudioWorklet processor.
-// Maintains a fixed 60s circular buffer of stereo PCM at the current
-// AudioContext sample rate. On request, posts a contiguous copy of the
-// last `seconds` of audio back to the main thread.
+// Fixed-size circular buffer of stereo PCM at the AudioContext sample rate.
+// On `snapshot`, posts a contiguous copy of the last N seconds to the main
+// thread.
 //
-// Messages in:
-//   { type: "snapshot", seconds: number, requestId: string }
-//   { type: "clear" }
-//   { type: "paused", paused: boolean }
-// Messages out:
-//   { type: "ready", sampleRate, bufferFrames }
-//   { type: "snapshot", requestId, sampleRate, channels: Float32Array[] }
-//   { type: "level", peak: number, rms: number }   // ~10/s
+// In:  { type: "snapshot", seconds, requestId } | { type: "clear" } | { type: "paused", paused }
+// Out: { type: "ready", sampleRate, bufferFrames }
+//      { type: "snapshot", requestId, sampleRate, channels }
+//      { type: "level", peak, rms, filled, capacity }  // ~10/s
 
 class RollingBufferProcessor extends AudioWorkletProcessor {
   constructor(options) {
@@ -23,7 +18,7 @@ class RollingBufferProcessor extends AudioWorkletProcessor {
       new Float32Array(this.capacity),
     ];
     this.writeIdx = 0;
-    this.filled = 0; // frames filled so far (capped at capacity)
+    this.filled = 0;
     this.paused = true; // start paused so we don't capture silence pre-play
     this.levelCounter = 0;
     this.levelPeak = 0;
@@ -61,7 +56,6 @@ class RollingBufferProcessor extends AudioWorkletProcessor {
         return;
       }
       const channels = [new Float32Array(frames), new Float32Array(frames)];
-      // The most-recent sample is at (writeIdx - 1). Walk back `frames`.
       const startReadIdx = (this.writeIdx - frames + this.capacity) % this.capacity;
       for (let c = 0; c < this.numChannels; c++) {
         for (let i = 0; i < frames; i++) {
@@ -115,7 +109,7 @@ class RollingBufferProcessor extends AudioWorkletProcessor {
     this.levelFrames += frames;
     this.levelCounter += frames;
 
-    // Emit level + fill roughly every 100ms
+    // Emit ~10/s
     if (this.levelCounter >= sampleRate / 10) {
       const rms = Math.sqrt(this.levelSumSq / Math.max(1, this.levelFrames));
       this.port.postMessage({

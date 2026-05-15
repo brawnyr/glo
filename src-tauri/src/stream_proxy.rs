@@ -1,16 +1,14 @@
-// Minimal local HTTP proxy that fetches an upstream radio stream and pipes
-// it back to the webview, sidestepping CORS. The webview hits:
+// Local HTTP proxy that fetches an upstream radio stream and pipes it back
+// to the webview, sidestepping CORS. The webview hits:
 //
 //     http://127.0.0.1:<port>/stream?url=<encoded upstream URL>
 //
-// We forward the response body as-is with permissive CORS headers and copy
-// over Content-Type / Icy-* metadata when present. We also request ICY
-// inline metadata, parse the StreamTitle from it, strip it before forwarding
-// the audio bytes downstream, and emit a `current-track` Tauri event on
-// title changes.
+// We also request ICY inline metadata, strip it from the audio bytes before
+// forwarding, and emit a `current-track` Tauri event on title changes.
 
 use std::convert::Infallible;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 
 use async_stream::stream;
@@ -26,10 +24,15 @@ use hyper_util::rt::TokioIo;
 use reqwest::Client;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
-use tokio::net::TcpListener;
+use tokio::net::{lookup_host, TcpListener};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use url::Url;
 
 type BoxedBody = BoxBody<Bytes, std::io::Error>;
+
+/// Cap on concurrent in-flight `/stream` requests. A malicious page could
+/// otherwise open unbounded upstream connections through this proxy.
+const MAX_CONCURRENT_STREAMS: usize = 4;
 
 #[derive(Serialize, Clone)]
 struct TrackEvent {
@@ -72,7 +75,88 @@ fn text(status: StatusCode, msg: &str) -> Response<BoxedBody> {
     r
 }
 
-/// Extract `StreamTitle='...'` from an ICY metadata string.
+/// Returns true if the given IP must not be reachable via this proxy.
+/// Covers loopback, unspecified, private, link-local, multicast, broadcast,
+/// documentation, and reserved ranges across both IPv4 and IPv6 — including
+/// IPv6 `::1`, `::`, `fe80::/10` (link-local) and `fc00::/7` (unique local),
+/// which the previous string-prefix check missed.
+fn is_blocked_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            // is_private covers 10/8, 172.16/12, 192.168/16.
+            v4.is_loopback()
+                || v4.is_unspecified()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_multicast()
+                || v4.is_broadcast()
+                || v4.is_documentation()
+                // 0.0.0.0/8 (current network) is partially covered by is_unspecified
+                // for the all-zero case; reject the whole /8 for safety.
+                || v4.octets()[0] == 0
+                // 240.0.0.0/4 reserved (excluding broadcast handled above).
+                || v4.octets()[0] >= 240
+                // 100.64.0.0/10 carrier-grade NAT.
+                || (v4.octets()[0] == 100 && (v4.octets()[1] & 0xc0) == 64)
+        }
+        IpAddr::V6(v6) => {
+            // is_loopback covers ::1; is_unspecified covers ::.
+            if v6.is_loopback() || v6.is_unspecified() || v6.is_multicast() {
+                return true;
+            }
+            // IPv4-mapped (::ffff:a.b.c.d) and IPv4-compatible — apply v4 rules.
+            if let Some(v4) = v6.to_ipv4_mapped() {
+                return is_blocked_ip(IpAddr::V4(v4));
+            }
+            if let Some(v4) = v6.to_ipv4() {
+                return is_blocked_ip(IpAddr::V4(v4));
+            }
+            let seg0 = v6.segments()[0];
+            // fe80::/10 — link-local. (Ipv6Addr::is_unicast_link_local is
+            // unstable on 1.75, so byte-check the high 10 bits.)
+            if (seg0 & 0xffc0) == 0xfe80 {
+                return true;
+            }
+            // fc00::/7 — unique local addresses (ULA).
+            if (seg0 & 0xfe00) == 0xfc00 {
+                return true;
+            }
+            // fec0::/10 — deprecated site-local; reject defensively.
+            if (seg0 & 0xffc0) == 0xfec0 {
+                return true;
+            }
+            false
+        }
+    }
+}
+
+/// Resolves `host:port` and returns the addresses iff every resolved IP is
+/// safe (not in a blocked range). Any blocked IP fails the whole lookup —
+/// this is what closes the DNS-rebinding window: we both validate *and* hand
+/// the resolved sockets straight to reqwest, so the upstream fetch cannot
+/// re-resolve to a different address later.
+async fn resolve_and_validate(host: &str, port: u16) -> Result<Vec<SocketAddr>, &'static str> {
+    // Literal IPs in the URL skip DNS but must still be validated.
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        if is_blocked_ip(ip) {
+            return Err("blocked address");
+        }
+        return Ok(vec![SocketAddr::new(ip, port)]);
+    }
+
+    let iter = lookup_host((host, port))
+        .await
+        .map_err(|_| "dns lookup failed")?;
+    let addrs: Vec<SocketAddr> = iter.collect();
+    if addrs.is_empty() {
+        return Err("dns lookup returned no addresses");
+    }
+    if addrs.iter().any(|a| is_blocked_ip(a.ip())) {
+        return Err("upstream resolves to a blocked address");
+    }
+    Ok(addrs)
+}
+
 fn extract_stream_title(meta: &str) -> Option<String> {
     let key = "StreamTitle=";
     let start = meta.find(key)? + key.len();
@@ -94,9 +178,8 @@ fn extract_stream_title(meta: &str) -> Option<String> {
     }
 }
 
-/// Wrap an upstream stream that has ICY inline metadata. Strip the metadata
-/// bytes from the downstream output and emit `current-track` events on
-/// title changes.
+/// Pulls ICY inline metadata out of the upstream byte stream, yielding only
+/// the audio bytes downstream and emitting `current-track` events on changes.
 fn strip_icy_metadata<S>(
     mut upstream: S,
     metaint: usize,
@@ -151,7 +234,7 @@ where
                         meta_buf.extend_from_slice(&data[..take]);
                         data = &data[take..];
                         if take == remaining {
-                            // null-strip and parse as latin-1ish utf-8
+                            // ICY metadata frames are null-padded to the next 16-byte boundary.
                             let trimmed: Vec<u8> = meta_buf
                                 .iter()
                                 .copied()
@@ -178,8 +261,9 @@ where
 
 async fn handle(
     req: Request<Incoming>,
-    http: Client,
+    _http: Client,
     app: AppHandle,
+    sem: Arc<Semaphore>,
 ) -> Result<Response<BoxedBody>, Infallible> {
     if req.method() == Method::OPTIONS {
         return Ok(empty(StatusCode::NO_CONTENT));
@@ -196,6 +280,19 @@ async fn handle(
         return Ok(text(StatusCode::NOT_FOUND, "not found"));
     }
 
+    // Concurrency cap: refuse new streams once MAX_CONCURRENT_STREAMS are
+    // already in flight. Permit is held until the response body finishes
+    // streaming (it's moved into the body's stream closure below).
+    let permit = match sem.clone().try_acquire_owned() {
+        Ok(p) => p,
+        Err(_) => {
+            return Ok(text(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "too many concurrent streams",
+            ));
+        }
+    };
+
     let parsed = match Url::parse(&format!("http://x/?{query}")) {
         Ok(u) => u,
         Err(_) => return Ok(text(StatusCode::BAD_REQUEST, "bad query")),
@@ -209,33 +306,65 @@ async fn handle(
         None => return Ok(text(StatusCode::BAD_REQUEST, "missing url param")),
     };
 
-    if let Ok(target) = Url::parse(&upstream) {
-        match target.host_str() {
-            Some(host) => {
-                let lower = host.to_lowercase();
-                let is_local = lower == "localhost"
-                    || lower.ends_with(".localhost")
-                    || lower == "127.0.0.1"
-                    || lower.starts_with("10.")
-                    || lower.starts_with("192.168.")
-                    || lower.starts_with("169.254.")
-                    || lower == "0.0.0.0";
-                if is_local {
-                    return Ok(text(StatusCode::FORBIDDEN, "local upstream blocked"));
-                }
-            }
-            None => return Ok(text(StatusCode::BAD_REQUEST, "invalid upstream url")),
-        }
-    } else {
-        return Ok(text(StatusCode::BAD_REQUEST, "invalid upstream url"));
+    let target = match Url::parse(&upstream) {
+        Ok(u) => u,
+        Err(_) => return Ok(text(StatusCode::BAD_REQUEST, "invalid upstream url")),
+    };
+
+    // Only http(s) upstreams. Blocks file://, gopher://, etc.
+    let scheme = target.scheme();
+    if scheme != "http" && scheme != "https" {
+        return Ok(text(StatusCode::FORBIDDEN, "unsupported scheme"));
     }
 
-    log::info!("proxy GET {}", upstream);
+    let host = match target.host_str() {
+        Some(h) => h.to_string(),
+        None => return Ok(text(StatusCode::BAD_REQUEST, "invalid upstream url")),
+    };
 
-    let upstream_req = http
+    // Quick reject for hostnames we know point at the loopback adapter; the
+    // OS resolver is also asked below, but this saves a DNS round-trip and
+    // catches `localhost` even when nsswitch is misconfigured.
+    let lower = host.to_lowercase();
+    if lower == "localhost" || lower.ends_with(".localhost") {
+        return Ok(text(StatusCode::FORBIDDEN, "local upstream blocked"));
+    }
+
+    let port = target.port_or_known_default().unwrap_or(80);
+
+    // Resolve once, validate every IP, then pin reqwest to those exact
+    // SocketAddrs. This closes the DNS-rebinding window: even if the
+    // attacker's authoritative server returns a private IP a moment later,
+    // reqwest will only ever connect to the addresses we already approved.
+    let addrs = match resolve_and_validate(&host, port).await {
+        Ok(a) => a,
+        Err(reason) => {
+            log::warn!("blocked upstream {host}: {reason}");
+            return Ok(text(StatusCode::FORBIDDEN, reason));
+        }
+    };
+
+    // Per-request client with the resolution pinned. The shared `_http`
+    // client doesn't expose `resolve_to_addrs` overrides post-build, so we
+    // spin up a small one here. (Cost is negligible next to a streaming
+    // radio fetch.)
+    let pinned_client = match reqwest::Client::builder()
+        .user_agent("Glo/0.1")
+        .resolve_to_addrs(&host, &addrs)
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            log::warn!("client build failed: {e}");
+            return Ok(text(StatusCode::INTERNAL_SERVER_ERROR, "client build failed"));
+        }
+    };
+
+    log::info!("proxy GET {} (resolved to {} addr(s))", upstream, addrs.len());
+
+    let upstream_req = pinned_client
         .get(&upstream)
-        .header("Icy-MetaData", "1")
-        .header("User-Agent", "Glo/0.1");
+        .header("Icy-MetaData", "1");
 
     let upstream_resp = match upstream_req.send().await {
         Ok(r) => r,
@@ -262,15 +391,19 @@ async fn handle(
 
     let body: BoxedBody = if let Some(n) = metaint {
         log::info!("upstream serves ICY metadata every {n} bytes");
-        let s = strip_icy_metadata(upstream_resp.bytes_stream(), n, app);
+        let s = Box::pin(strip_icy_metadata(upstream_resp.bytes_stream(), n, app));
+        let s = PermitStream::new(s, permit);
         let frames = s.map_ok(Frame::data);
         BodyExt::boxed(StreamBody::new(frames))
     } else {
-        let s = upstream_resp
-            .bytes_stream()
-            .map_ok(Frame::data)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
-        BodyExt::boxed(StreamBody::new(s))
+        let s = Box::pin(
+            upstream_resp
+                .bytes_stream()
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)),
+        );
+        let s = PermitStream::new(s, permit);
+        let frames = s.map_ok(Frame::data);
+        BodyExt::boxed(StreamBody::new(frames))
     };
 
     let mut out = Response::builder()
@@ -291,7 +424,37 @@ async fn handle(
     Ok(out)
 }
 
-/// Spawn the proxy on a random free port. Returns (port, thread handle).
+/// Wraps a stream so the concurrency-cap permit is dropped only when the
+/// wrapped stream is dropped — i.e. when the client disconnects or the
+/// upstream finishes. Without this the permit would release the moment
+/// `handle` returns, defeating the cap on long-running streams.
+struct PermitStream<S> {
+    inner: S,
+    // Only `Drop` cares about the permit; it owns nothing else.
+    _permit: OwnedSemaphorePermit,
+}
+
+impl<S> PermitStream<S> {
+    fn new(inner: S, permit: OwnedSemaphorePermit) -> Self {
+        Self { inner, _permit: permit }
+    }
+}
+
+impl<S, T, E> Stream for PermitStream<S>
+where
+    S: Stream<Item = Result<T, E>> + Unpin,
+{
+    type Item = Result<T, E>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        std::pin::Pin::new(&mut self.inner).poll_next(cx)
+    }
+}
+
+/// Spawns the proxy on a random free port and returns (port, thread handle).
 pub fn spawn(http: Client, app: AppHandle) -> (u16, JoinHandle<()>) {
     let (port_tx, port_rx) = std::sync::mpsc::channel::<u16>();
 
@@ -309,6 +472,8 @@ pub fn spawn(http: Client, app: AppHandle) -> (u16, JoinHandle<()>) {
                 let local_port = listener.local_addr().expect("local addr").port();
                 let _ = port_tx.send(local_port);
 
+                let sem = Arc::new(Semaphore::new(MAX_CONCURRENT_STREAMS));
+
                 loop {
                     let (stream, _) = match listener.accept().await {
                         Ok(p) => p,
@@ -320,11 +485,14 @@ pub fn spawn(http: Client, app: AppHandle) -> (u16, JoinHandle<()>) {
                     let io = TokioIo::new(stream);
                     let client = http.clone();
                     let app_h = app.clone();
+                    let sem = sem.clone();
                     tokio::spawn(async move {
                         let _ = http1::Builder::new()
                             .serve_connection(
                                 io,
-                                service_fn(move |req| handle(req, client.clone(), app_h.clone())),
+                                service_fn(move |req| {
+                                    handle(req, client.clone(), app_h.clone(), sem.clone())
+                                }),
                             )
                             .await;
                     });

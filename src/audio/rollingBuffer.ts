@@ -1,5 +1,4 @@
 // Main-thread interface to the rolling-buffer AudioWorklet.
-// Owns the AudioContext, the <audio> element source, and the worklet node.
 
 export const BUFFER_SECONDS = 60;
 
@@ -23,7 +22,6 @@ export class RollingBuffer {
 
   async attach(audioEl: HTMLAudioElement) {
     if (this.audioEl === audioEl && this.ctx) return;
-    // If we're swapping element, tear down and recreate
     if (this.audioEl && this.audioEl !== audioEl) {
       await this.destroy();
     }
@@ -69,15 +67,16 @@ export class RollingBuffer {
     gain.gain.value = 1;
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 256;
-    // Muted sink keeps the worklet's output connected to the graph so
+    // Muted sink keeps the worklet's output wired to the graph so
     // process() runs reliably across engines.
     const sink = ctx.createGain();
     sink.gain.value = 0;
 
-    // Volume affects playback only — the recorder taps the raw source.
-    // src -> worklet -> muted sink -> destination   (recorder + keep-alive)
-    // src -> analyser                                (meter reflects recorded level)
-    // src -> gain -> destination                     (audible playback)
+    // Volume affects playback only — the recorder taps the raw source so
+    // saved clips don't reflect what the user happens to be listening at.
+    //   src -> worklet -> muted sink -> destination   (recorder + keep-alive)
+    //   src -> analyser                                (meter on recorded level)
+    //   src -> gain    -> destination                  (audible playback)
     src.connect(node);
     node.connect(sink);
     sink.connect(ctx.destination);

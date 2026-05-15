@@ -1,4 +1,4 @@
-// Thin wrapper around Tauri invoke/event that survives running in plain browser dev.
+// Wrapper around Tauri invoke/event that's safe to call from plain browser dev.
 
 type InvokeFn = <T = unknown>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 type ListenFn = <T>(event: string, handler: (e: { payload: T }) => void) => Promise<() => void>;

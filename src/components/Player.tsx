@@ -34,7 +34,6 @@ export default function Player({
       ? `http://127.0.0.1:${proxyPort}/stream?url=${encodeURIComponent(station.url_resolved || station.url)}`
       : null;
 
-  // Attach worklet
   useEffect(() => {
     if (!audioRef.current) return;
     let cancelled = false;
@@ -65,13 +64,12 @@ export default function Player({
     rbRef.current?.setVolume(volume);
   }, [volume]);
 
-  // Freeze the rolling buffer whenever audio isn't actively playing, so we
-  // don't capture silence (paused, loading/stalled, error, or pre-play).
+  // Freeze the rolling buffer whenever audio isn't actively playing, so
+  // captures don't contain silence from pauses/stalls/pre-play.
   useEffect(() => {
     rbRef.current?.setPaused(status !== "playing");
   }, [status]);
 
-  // Load + play on station change
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -121,7 +119,6 @@ export default function Player({
 
   return (
     <div className={`relative panel p-4 overflow-hidden ${status === "playing" ? "now-playing-glow" : ""}`}>
-      {/* hazy cream bleed from the top of the panel */}
       <div className="absolute inset-x-0 top-0 h-8 cream-bleed pointer-events-none" />
       <audio
         ref={audioRef}

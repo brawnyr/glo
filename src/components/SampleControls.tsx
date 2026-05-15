@@ -24,7 +24,6 @@ export default function SampleControls({
 
   return (
     <div className="panel p-3 flex items-center gap-3 relative overflow-hidden">
-      {/* hazy cream bleed from top */}
       <div className="absolute inset-x-0 top-0 h-5 cream-bleed pointer-events-none" />
       <CassetteSprite size={36} />
       <div className="flex flex-col relative">

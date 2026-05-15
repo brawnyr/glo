@@ -26,12 +26,13 @@ pub fn run() {
                 .expect("reqwest client");
             let (port, handle) = stream_proxy::spawn(http.clone(), app.handle().clone());
             log::info!("stream proxy listening on http://127.0.0.1:{port}");
+            // Proxy thread runs for the lifetime of the process.
             std::mem::forget(handle);
 
             let state = AppState { http, proxy_port: port };
             app.manage(Arc::new(state));
 
-            // System tray: keeps audio playing when the window is hidden.
+            // System tray keeps audio playing when the window is hidden.
             let show_item = MenuItem::with_id(app, "show", "Show window", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit Glo", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
