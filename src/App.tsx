@@ -4,7 +4,7 @@ import StationList from "./components/StationList";
 import Player from "./components/Player";
 import SampleControls from "./components/SampleControls";
 import ClipLibrary from "./components/ClipLibrary";
-import { searchStations, topStations, trackClick } from "./api/radioBrowser";
+import { recommendedStations, searchStations, trackClick } from "./api/radioBrowser";
 import type { FilterState, Settings, Station } from "./types";
 import { loadSettings, saveSettings } from "./lib/settings";
 import { invoke, isTauri, listen } from "./lib/tauri";
@@ -98,10 +98,10 @@ export default function App() {
     })();
   }, [settings.clipsDir, clipsRefresh]);
 
-  // Initial station list
+  // Initial station list — curated music recommendations, not raw top-vote.
   useEffect(() => {
     setLoading(true);
-    topStations(80)
+    recommendedStations(80)
       .then((rows) => setStations(rows))
       .catch(() => setStations([]))
       .finally(() => setLoading(false));
@@ -114,7 +114,7 @@ export default function App() {
     const isEmpty = !filter.query && !filter.country && !filter.language && !filter.tag;
     if (isEmpty) {
       setLoading(true);
-      topStations(80)
+      recommendedStations(80)
         .then((rows) => setStations(rows))
         .catch(() => setStations([]))
         .finally(() => setLoading(false));
