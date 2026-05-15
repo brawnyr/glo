@@ -74,12 +74,15 @@ export class RollingBuffer {
     const sink = ctx.createGain();
     sink.gain.value = 0;
 
-    // src -> gain -> [worklet -> muted sink -> destination, analyser, destination]
-    src.connect(gain);
-    gain.connect(node);
+    // Volume affects playback only — the recorder taps the raw source.
+    // src -> worklet -> muted sink -> destination   (recorder + keep-alive)
+    // src -> analyser                                (meter reflects recorded level)
+    // src -> gain -> destination                     (audible playback)
+    src.connect(node);
     node.connect(sink);
     sink.connect(ctx.destination);
-    gain.connect(analyser);
+    src.connect(analyser);
+    src.connect(gain);
     gain.connect(ctx.destination);
 
     this.src = src;
