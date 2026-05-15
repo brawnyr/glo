@@ -31,7 +31,7 @@ async function pickMirror(): Promise<string> {
 }
 
 const HEADERS = {
-  "User-Agent": "RadioSampler/0.1",
+  "User-Agent": "Glo/0.1",
   "Content-Type": "application/x-www-form-urlencoded",
 };
 

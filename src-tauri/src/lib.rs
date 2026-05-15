@@ -21,7 +21,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let http = reqwest::Client::builder()
-                .user_agent("RadioSampler/0.1")
+                .user_agent("Glo/0.1")
                 .build()
                 .expect("reqwest client");
             let (port, handle) = stream_proxy::spawn(http.clone(), app.handle().clone());
@@ -33,11 +33,11 @@ pub fn run() {
 
             // System tray: keeps audio playing when the window is hidden.
             let show_item = MenuItem::with_id(app, "show", "Show window", true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(app, "quit", "Quit Radio Sampler", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Quit Glo", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
             let mut tray_builder = TrayIconBuilder::new()
                 .menu(&menu)
-                .tooltip("Radio Sampler")
+                .tooltip("Glo")
                 .show_menu_on_left_click(false);
             if let Some(icon) = app.default_window_icon().cloned() {
                 tray_builder = tray_builder.icon(icon);
@@ -84,5 +84,5 @@ pub fn run() {
             commands::ensure_dir,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running radio-sampler");
+        .expect("error while running glo");
 }

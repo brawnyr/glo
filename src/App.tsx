@@ -253,7 +253,7 @@ export default function App() {
       {/* Title bar */}
       <header className="relative px-4 py-2 flex items-center gap-3 border-b border-roast-900 z-10">
         <MugSprite size={24} />
-        <div className="font-display text-cream-100 text-lg leading-none">Radio Sampler</div>
+        <div className="font-display text-cream-100 text-lg leading-none">Glo</div>
         <div className="font-pixel text-[10px] uppercase tracking-widest text-cream-400 leading-none">
           · pour something good
         </div>

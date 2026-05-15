@@ -1,4 +1,4 @@
-# Radio Sampler
+# Glo
 
 > init, basic idea is listen to radio from around the world, if you here something you want to record, you can retro actively record
 
@@ -22,7 +22,7 @@ Most radio streams reject browser CORS. The Rust side spawns a Hyper server on a
 
 ## Layout
 ```
-radio-sampler/
+glo/
 ├── src-tauri/
 │   ├── src/
 │   │   ├── lib.rs              # entry, state, command registry

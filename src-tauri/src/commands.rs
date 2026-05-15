@@ -50,7 +50,7 @@ pub fn default_clips_dir() -> Result<String, String> {
     let dir = dirs::audio_dir()
         .or_else(dirs::home_dir)
         .ok_or_else(|| "no audio/home dir".to_string())?
-        .join("RadioSampler");
+        .join("Glo");
     Ok(dir.to_string_lossy().to_string())
 }
 

@@ -235,7 +235,7 @@ async fn handle(
     let upstream_req = http
         .get(&upstream)
         .header("Icy-MetaData", "1")
-        .header("User-Agent", "RadioSampler/0.1");
+        .header("User-Agent", "Glo/0.1");
 
     let upstream_resp = match upstream_req.send().await {
         Ok(r) => r,

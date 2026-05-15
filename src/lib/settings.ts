@@ -1,6 +1,6 @@
 import { Settings } from "../types";
 
-const KEY = "radio-sampler:settings";
+const KEY = "glo:settings";
 
 const DEFAULTS: Settings = {
   clipsDir: null,

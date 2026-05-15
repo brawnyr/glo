@@ -1,12 +1,12 @@
 [package]
-name = "radio-sampler"
+name = "glo"
 version = "0.1.0"
 description = "A pixel-pretty desktop radio sampler"
 edition = "2021"
 rust-version = "1.75"
 
 [lib]
-name = "radio_sampler_lib"
+name = "glo_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
