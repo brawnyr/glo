@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { listCountries, listLanguages, listTopTags } from "../api/radioBrowser";
 import type { FilterState } from "../types";
 
@@ -29,18 +29,25 @@ export default function Sidebar({
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([listCountries(), listLanguages(), listTopTags(60)])
+    Promise.all([listCountries(), listLanguages(), listTopTags(200)])
       .then(([c, l, t]) => {
         if (cancelled) return;
         setCountries(c.filter((x) => x.stationcount > 20).sort((a, b) => b.stationcount - a.stationcount));
         setLanguages(l.filter((x) => x.stationcount > 20).sort((a, b) => b.stationcount - a.stationcount));
-        setTags(t);
+        setTags(t.sort((a, b) => b.stationcount - a.stationcount));
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, []);
+
+  const [tagFocused, setTagFocused] = useState(false);
+  const tagSuggestions = useMemo(() => {
+    const q = filter.tag.toLowerCase().trim();
+    if (!q) return tags.slice(0, 14);
+    return tags.filter((t) => t.name.toLowerCase().includes(q)).slice(0, 14);
+  }, [filter.tag, tags]);
 
   return (
     <aside className="w-64 shrink-0 panel m-3 mr-0 p-4 flex flex-col gap-4 overflow-y-auto">
@@ -95,15 +102,43 @@ export default function Sidebar({
 
       <div>
         <div className="font-pixel text-xs uppercase tracking-widest text-cream-300 mb-2">Genre</div>
-        <div className="flex flex-wrap gap-1">
-          <TagChip active={filter.tag === ""} onClick={() => onChange({ ...filter, tag: "" })}>
-            any
-          </TagChip>
-          {tags.slice(0, 30).map((t) => (
-            <TagChip key={t.name} active={filter.tag === t.name} onClick={() => onChange({ ...filter, tag: t.name })}>
-              {t.name}
-            </TagChip>
-          ))}
+        <div className="relative">
+          <input
+            className="input-pixel w-full pr-7"
+            placeholder="search genres…"
+            value={filter.tag}
+            onChange={(e) => onChange({ ...filter, tag: e.target.value })}
+            onFocus={() => setTagFocused(true)}
+            onBlur={() => window.setTimeout(() => setTagFocused(false), 120)}
+          />
+          {filter.tag && (
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onChange({ ...filter, tag: "" })}
+              className="absolute right-1 top-1/2 -translate-y-1/2 px-1.5 font-mono text-xs text-cream-400 hover:text-cream-200"
+              title="clear genre"
+            >
+              ×
+            </button>
+          )}
+          {tagFocused && tagSuggestions.length > 0 && (
+            <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-roast-800 border border-roast-900 shadow-lg max-h-72 overflow-y-auto">
+              {tagSuggestions.map((t) => (
+                <button
+                  key={t.name}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    onChange({ ...filter, tag: t.name });
+                    setTagFocused(false);
+                  }}
+                  className="w-full text-left px-2 py-1 hover:bg-roast-700 flex items-center justify-between gap-2 font-mono text-xs"
+                >
+                  <span className="text-cream-200 truncate">{t.name}</span>
+                  <span className="text-cream-400 text-[10px] tabular-nums shrink-0">{t.stationcount}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </aside>
@@ -141,25 +176,3 @@ function Pill({ children }: { children: React.ReactNode }) {
   );
 }
 
-function TagChip({
-  children,
-  active,
-  onClick,
-}: {
-  children: React.ReactNode;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wider border ${
-        active
-          ? "bg-crema-500 text-roast-900 border-roast-900"
-          : "bg-roast-800 text-cream-300 border-roast-900 hover:bg-roast-700"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
