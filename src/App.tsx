@@ -14,10 +14,8 @@ import { MugSprite } from "./assets/pixel-sprites";
 
 type View = "all" | "favorites" | "library";
 
-const CLIPS_DIR = "C:\\Users\\brawny\\sample library\\radio";
-
 export default function App() {
-  const [settings, setSettings] = useState<Settings>(() => ({ ...loadSettings(), clipsDir: CLIPS_DIR }));
+  const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const [filter, setFilter] = useState<FilterState>({ query: "", country: "", language: "", tag: "" });
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(false);
@@ -50,15 +48,25 @@ export default function App() {
     })();
   }, []);
 
+  // First-launch clips folder bootstrap: if the user hasn't picked or used one yet,
+  // default to ~/Documents/Glo Clips (or the OS equivalent) and create it.
   useEffect(() => {
     (async () => {
       if (!(await isTauri())) return;
       try {
-        await invoke("ensure_dir", { path: CLIPS_DIR });
+        if (settings.clipsDir) {
+          await invoke("ensure_dir", { path: settings.clipsDir });
+          return;
+        }
+        const dir = await invoke<string>("default_clips_dir");
+        await invoke("ensure_dir", { path: dir });
+        setSettings((s) => ({ ...s, clipsDir: dir }));
       } catch {
-        // ignore
+        // user can still pick a folder via the UI
       }
     })();
+    // run once on mount; subsequent changes are handled by the picker callback
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

@@ -24,11 +24,12 @@ pub fn get_proxy_port(state: State<'_, Arc<AppState>>) -> u16 {
 
 #[tauri::command]
 pub fn default_clips_dir() -> Result<String, String> {
-    let dir = dirs::home_dir()
-        .ok_or_else(|| "no home dir".to_string())?
-        .join("sample library")
-        .join("radio");
-    Ok(dir.to_string_lossy().to_string())
+    // Prefer ~/Documents/Glo Clips so the folder is easy to find from any OS file manager.
+    // Falls back to home dir if Documents isn't resolvable (rare).
+    let base = dirs::document_dir()
+        .or_else(dirs::home_dir)
+        .ok_or_else(|| "no documents or home dir".to_string())?;
+    Ok(base.join("Glo Clips").to_string_lossy().to_string())
 }
 
 #[tauri::command]
