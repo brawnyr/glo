@@ -110,17 +110,6 @@ glo/
 └── package.json
 ```
 
-## Aesthetic notes
-- Palette: espresso → cream gradient (`#0f0a07` → `#f4e8d0`) with crema-orange (`#d97f3c`) accents
-- Inter for body, Pixelify Sans for headers, JetBrains Mono for metadata
-- Pixel sprites only on the player (mug, vinyl, cassette, signal bars, heart)
-- Cream-into-coffee dithered bleed at panel tops, scanlines on the player
-
-## Known limitations
-- WAVs are saved at the `AudioContext`'s sample rate (typically 48 kHz), not the stream's bitrate.
-- The proxy runs on `127.0.0.1` only and blocks obvious-local upstreams to prevent SSRF.
-- No MP3 encoding (WAV only). No accounts / cloud sync. No mobile builds.
-
 ## Network & privacy
 
 Glo makes outbound HTTPS calls to these endpoints only:
