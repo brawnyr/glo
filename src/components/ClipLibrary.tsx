@@ -60,11 +60,25 @@ export default function ClipLibrary({ clipsDir, refreshKey, onPickDir, onChanged
 
   if (clips.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-2 text-cream-300">
+      <div className="flex-1 flex flex-col items-center justify-center gap-2 text-cream-300 px-4">
         <CassetteSprite size={48} />
         <div className="font-display text-lg">no clips saved yet</div>
-        <div className="font-mono text-xs text-cream-400">
+        <div className="font-mono text-xs text-cream-400 text-center">
           press <kbd className="px-1 py-0 bg-roast-700 border border-roast-900">[</kbd> to save the last 30s while playing.
+        </div>
+        <div className="mt-3 flex items-center gap-2 px-2 py-1 bg-roast-900 border border-roast-800 max-w-full">
+          <span className="font-pixel text-[10px] uppercase tracking-widest text-cream-400 shrink-0">
+            saving to
+          </span>
+          <span className="font-mono text-[11px] text-cream-200 truncate" title={clipsDir}>
+            {clipsDir}
+          </span>
+          <button
+            onClick={onPickDir}
+            className="font-pixel text-[10px] uppercase tracking-wider text-crema-400 hover:text-crema-300 shrink-0"
+          >
+            change
+          </button>
         </div>
       </div>
     );
@@ -72,6 +86,20 @@ export default function ClipLibrary({ clipsDir, refreshKey, onPickDir, onChanged
 
   return (
     <div className="flex-1 overflow-y-auto pr-1">
+      <div className="mb-2 flex items-center gap-2 px-2 py-1 bg-roast-900 border border-roast-800">
+        <span className="font-pixel text-[10px] uppercase tracking-widest text-cream-400 shrink-0">
+          saving to
+        </span>
+        <span className="font-mono text-[11px] text-cream-200 truncate flex-1" title={clipsDir}>
+          {clipsDir}
+        </span>
+        <button
+          onClick={onPickDir}
+          className="font-pixel text-[10px] uppercase tracking-wider text-crema-400 hover:text-crema-300 shrink-0"
+        >
+          change
+        </button>
+      </div>
       {err && (
         <div className="mb-2 px-2 py-1 font-mono text-xs text-crema-400 border border-crema-700 bg-roast-900">
           {err}

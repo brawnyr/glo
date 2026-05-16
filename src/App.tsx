@@ -4,6 +4,7 @@ import StationList from "./components/StationList";
 import Player, { PlayerHandle } from "./components/Player";
 import SampleControls from "./components/SampleControls";
 import ClipLibrary from "./components/ClipLibrary";
+import FirstRunModal from "./components/FirstRunModal";
 import { recommendedStations, searchStations, trackClick } from "./api/radioBrowser";
 import type { FilterState, Settings, Station } from "./types";
 import { loadSettings, saveSettings } from "./lib/settings";
@@ -31,6 +32,8 @@ export default function App() {
   const [clipCount, setClipCount] = useState(0);
   const [rb, setRb] = useState<RollingBuffer | null>(null);
   const [splash, setSplash] = useState<{ id: number; x: number; y: number } | null>(null);
+  const [firstRunDefault, setFirstRunDefault] = useState<string | null>(null);
+  const [firstRunBusy, setFirstRunBusy] = useState(false);
   const searchTimer = useRef<number | null>(null);
   const playerRef = useRef<PlayerHandle | null>(null);
 
@@ -48,8 +51,9 @@ export default function App() {
     })();
   }, []);
 
-  // First-launch clips folder bootstrap: if the user hasn't picked or used one yet,
-  // default to ~/Documents/Glo Clips (or the OS equivalent) and create it.
+  // First-launch clips folder: if the user hasn't picked one yet, fetch the
+  // OS-appropriate suggestion and let the modal prompt them. If they already
+  // have one, just make sure it still exists.
   useEffect(() => {
     (async () => {
       if (!(await isTauri())) return;
@@ -59,15 +63,33 @@ export default function App() {
           return;
         }
         const dir = await invoke<string>("default_clips_dir");
-        await invoke("ensure_dir", { path: dir });
-        setSettings((s) => ({ ...s, clipsDir: dir }));
+        setFirstRunDefault(dir);
       } catch {
-        // user can still pick a folder via the UI
+        // user can still pick via the library view
       }
     })();
-    // run once on mount; subsequent changes are handled by the picker callback
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const commitClipsDir = useCallback(async (path: string) => {
+    setFirstRunBusy(true);
+    try {
+      await invoke("ensure_dir", { path });
+      setSettings((s) => ({ ...s, clipsDir: path }));
+      setFirstRunDefault(null);
+    } finally {
+      setFirstRunBusy(false);
+    }
+  }, []);
+
+  const pickClipsDirForFirstRun = useCallback(async () => {
+    try {
+      const chosen = await invoke<string | null>("pick_clips_dir");
+      if (chosen) await commitClipsDir(chosen);
+    } catch {
+      // user cancelled
+    }
+  }, [commitClipsDir]);
 
   useEffect(() => {
     let cancelled = false;
@@ -377,6 +399,15 @@ export default function App() {
           <div className="splash splash-2" />
           <div className="splash-drop" />
         </div>
+      )}
+
+      {firstRunDefault && !settings.clipsDir && (
+        <FirstRunModal
+          suggestedPath={firstRunDefault}
+          onAccept={commitClipsDir}
+          onPickCustom={pickClipsDirForFirstRun}
+          busy={firstRunBusy}
+        />
       )}
     </div>
   );
