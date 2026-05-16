@@ -135,6 +135,10 @@ export async function recommendedStations(limit = 80, page = 0): Promise<Station
   const base = await pickMirror();
   const perTag = 25;
   const tagOffset = page * perTag;
+  // Per-call window into each bucket's top stations — keeps quality high
+  // (always within top ~6 by votes) while rotating which station lands first.
+  const WINDOW_START_MAX = 5;
+  const windowStart = page === 0 ? Math.floor(Math.random() * WINDOW_START_MAX) : 0;
 
   const bucketResults = await Promise.all(
     TASTE_BUCKETS.map(async (b) => {
@@ -152,9 +156,15 @@ export async function recommendedStations(limit = 80, page = 0): Promise<Station
       merged.sort(
         (a, b) => (b.votes ?? 0) - (a.votes ?? 0) || (b.bitrate ?? 0) - (a.bitrate ?? 0)
       );
-      return merged;
+      return windowStart > 0 ? merged.slice(windowStart) : merged;
     })
   );
+
+  // Shuffle bucket iteration order so the first ~N slots aren't always
+  // jazz → heavy → trap → … in fixed source order.
+  if (page === 0) {
+    bucketResults.sort(() => Math.random() - 0.5);
+  }
 
   const picked = new Set<string>();
   const out: Station[] = [];
