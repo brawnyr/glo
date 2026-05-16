@@ -2,7 +2,7 @@
 
 > Listen to radio from around the world. If you hear something you want to keep, retroactively record the last 30 or 60 seconds.
 
-A desktop radio app with a **rolling 60s buffer** — when something cool plays, hit `[` or `]` and you keep the last 30 s / 60 s as a WAV. Coffee-pour pixel aesthetic.
+A desktop radio app with a **rolling 60s buffer** — when something cool plays, hit `[` or `]` and you keep the last 30 s / 60 s as a WAV.
 
 ## Install
 
