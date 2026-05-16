@@ -14,6 +14,7 @@ export type PlayerHandle = {
 type Props = {
   station: Station | null;
   proxyPort: number | null;
+  proxyError: string | null;
   volume: number;
   currentTrack: string | null;
   onVolumeChange: (v: number) => void;
@@ -24,6 +25,7 @@ const Player = forwardRef<PlayerHandle, Props>(function Player(
   {
     station,
     proxyPort,
+    proxyError,
     volume,
     currentTrack,
     onVolumeChange,
@@ -199,11 +201,11 @@ const Player = forwardRef<PlayerHandle, Props>(function Player(
         <div className="flex items-center gap-3">
           <button
             onClick={togglePlay}
-            disabled={!station}
-            className={`w-14 h-14 flex items-center justify-center border-2 border-roast-950 ${
+            disabled={!station || !!proxyError}
+            className={`w-14 h-14 flex items-center justify-center border-2 border-roast-950 disabled:opacity-40 disabled:cursor-not-allowed ${
               status === "playing" ? "bg-crema-500 text-roast-900" : "bg-roast-700 text-cream-100"
             }`}
-            title={status === "playing" ? "pause (space)" : "play (space)"}
+            title={proxyError ? "audio backend unavailable" : status === "playing" ? "pause (space)" : "play (space)"}
           >
             {status === "playing" ? <PauseSprite size={28} /> : <PlaySprite size={28} />}
           </button>
@@ -222,9 +224,9 @@ const Player = forwardRef<PlayerHandle, Props>(function Player(
         </div>
       </div>
 
-      {error && (
+      {(proxyError || error) && (
         <div className="relative mt-3 px-2 py-1 font-mono text-xs text-crema-400 border border-crema-700 bg-roast-900">
-          {error}
+          {proxyError || error}
         </div>
       )}
     </div>

@@ -194,10 +194,13 @@ pub fn open_clip_in_folder(path: String) -> Result<(), String> {
 }
 
 fn sanitize(s: &str) -> String {
+    // Unicode-aware: keeps letters/digits in any script (Hangul, Cyrillic, Arabic, CJK, …),
+    // remaps spaces to '-', and replaces everything else (incl. control chars, path separators,
+    // Windows-reserved punctuation `< > : " / \ | ? *`, and emoji) with '_'.
     let cleaned: String = s
         .chars()
         .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
                 c
             } else if c == ' ' {
                 '-'
@@ -206,7 +209,9 @@ fn sanitize(s: &str) -> String {
             }
         })
         .collect();
-    cleaned.trim_matches('-').chars().take(60).collect()
+    // Strip leading/trailing punctuation Windows won't accept on its own (dots, spaces).
+    let trimmed = cleaned.trim_matches(|c: char| c == '-' || c == '_' || c == '.' || c == ' ');
+    trimmed.chars().take(60).collect()
 }
 
 // expects: YYYY-MM-DD_HH-MM-SS__<station>[__<track>]__<N>s.wav

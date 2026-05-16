@@ -121,6 +121,15 @@ glo/
 - The proxy runs on `127.0.0.1` only and blocks obvious-local upstreams to prevent SSRF.
 - No MP3 encoding (WAV only). No accounts / cloud sync. No mobile builds.
 
+## Network & privacy
+
+Glo makes outbound HTTPS calls to these endpoints only:
+
+- **`*.api.radio-browser.info`** — to search stations, fetch the country/language/genre lists, and pick a working mirror at startup. When you start playing a station, Glo also pings `/json/url/{uuid}` so radio-browser's popularity ranking reflects your play. No account, no identifiers — just the station UUID.
+- **The station's stream URL itself** — proxied through the local Rust process. Whatever host is behind the station you picked sees a streaming request from your IP.
+
+There is no telemetry, analytics, crash reporting, or update-check phoning home. Everything else (favorites, clips, settings) is stored locally.
+
 ## License
 
 [MIT](./LICENSE)

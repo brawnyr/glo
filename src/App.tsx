@@ -27,6 +27,7 @@ export default function App() {
   const [current, setCurrent] = useState<Station | null>(null);
   const [currentTrack, setCurrentTrack] = useState<string | null>(null);
   const [proxyPort, setProxyPort] = useState<number | null>(null);
+  const [proxyError, setProxyError] = useState<string | null>(null);
   const [view, setView] = useState<View>("all");
   const [clipsRefresh, setClipsRefresh] = useState(0);
   const [clipCount, setClipCount] = useState(0);
@@ -41,12 +42,18 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      if (!(await isTauri())) return;
+      if (!(await isTauri())) {
+        // Plain `npm run dev` (no Rust): playback won't work, but the UI still does.
+        setProxyError("audio backend not running — launch with `npm run tauri:dev`");
+        return;
+      }
       try {
         const port = await invoke<number>("get_proxy_port");
         setProxyPort(port);
-      } catch {
+        setProxyError(null);
+      } catch (e) {
         setProxyPort(null);
+        setProxyError(`audio proxy unavailable: ${String((e as Error)?.message || e)}`);
       }
     })();
   }, []);
@@ -334,6 +341,7 @@ export default function App() {
             ref={playerRef}
             station={current}
             proxyPort={proxyPort}
+            proxyError={proxyError}
             volume={settings.volume}
             currentTrack={currentTrack}
             onVolumeChange={(v) => setSettings((s) => ({ ...s, volume: v }))}
