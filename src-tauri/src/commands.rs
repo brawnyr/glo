@@ -23,21 +23,6 @@ pub fn get_proxy_port(state: State<'_, Arc<AppState>>) -> u16 {
 }
 
 #[tauri::command]
-pub fn default_clips_dir() -> Result<String, String> {
-    // Prefer ~/Documents/Glo Clips so the folder is easy to find from any OS file manager.
-    // Falls back to home dir if Documents isn't resolvable (rare).
-    let base = dirs::document_dir()
-        .or_else(dirs::home_dir)
-        .ok_or_else(|| "no documents or home dir".to_string())?;
-    Ok(base.join("Glo Clips").to_string_lossy().to_string())
-}
-
-#[tauri::command]
-pub fn ensure_dir(path: String) -> Result<(), String> {
-    std::fs::create_dir_all(&path).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 pub async fn pick_clips_dir(app: tauri::AppHandle) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
     let (tx, rx) = tokio::sync::oneshot::channel();
@@ -66,7 +51,6 @@ pub struct SaveClipArgs {
 #[tauri::command]
 pub fn save_clip(args: SaveClipArgs) -> Result<ClipMeta, String> {
     let dir = PathBuf::from(&args.dir);
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let ts = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
     let safe_station = sanitize(&args.station_name);
     let file_name = if args.track_title.trim().is_empty() {

@@ -33,7 +33,7 @@ export default function App() {
   const [clipCount, setClipCount] = useState(0);
   const [rb, setRb] = useState<RollingBuffer | null>(null);
   const [splash, setSplash] = useState<{ id: number; x: number; y: number } | null>(null);
-  const [firstRunDefault, setFirstRunDefault] = useState<string | null>(null);
+  const [showFirstRun, setShowFirstRun] = useState(false);
   const [firstRunBusy, setFirstRunBusy] = useState(false);
   const searchTimer = useRef<number | null>(null);
   const playerRef = useRef<PlayerHandle | null>(null);
@@ -58,45 +58,31 @@ export default function App() {
     })();
   }, []);
 
-  // First-launch clips folder: if the user hasn't picked one yet, fetch the
-  // OS-appropriate suggestion and let the modal prompt them. If they already
-  // have one, just make sure it still exists.
+  // First-launch clips folder: if the user hasn't picked one yet, show the
+  // intro modal that prompts them to choose one. We never create a folder on
+  // their behalf — the picker only returns existing folders.
   useEffect(() => {
     (async () => {
       if (!(await isTauri())) return;
-      try {
-        if (settings.clipsDir) {
-          await invoke("ensure_dir", { path: settings.clipsDir });
-          return;
-        }
-        const dir = await invoke<string>("default_clips_dir");
-        setFirstRunDefault(dir);
-      } catch {
-        // user can still pick via the library view
-      }
+      if (!settings.clipsDir) setShowFirstRun(true);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const commitClipsDir = useCallback(async (path: string) => {
+  const pickClipsDirForFirstRun = useCallback(async () => {
     setFirstRunBusy(true);
     try {
-      await invoke("ensure_dir", { path });
-      setSettings((s) => ({ ...s, clipsDir: path }));
-      setFirstRunDefault(null);
+      const chosen = await invoke<string | null>("pick_clips_dir");
+      if (chosen) {
+        setSettings((s) => ({ ...s, clipsDir: chosen }));
+        setShowFirstRun(false);
+      }
+    } catch {
+      // user cancelled
     } finally {
       setFirstRunBusy(false);
     }
   }, []);
-
-  const pickClipsDirForFirstRun = useCallback(async () => {
-    try {
-      const chosen = await invoke<string | null>("pick_clips_dir");
-      if (chosen) await commitClipsDir(chosen);
-    } catch {
-      // user cancelled
-    }
-  }, [commitClipsDir]);
 
   useEffect(() => {
     let cancelled = false;
@@ -239,10 +225,7 @@ export default function App() {
     if (!(await isTauri())) return;
     try {
       const chosen = await invoke<string | null>("pick_clips_dir");
-      if (chosen) {
-        await invoke("ensure_dir", { path: chosen });
-        setSettings((s) => ({ ...s, clipsDir: chosen }));
-      }
+      if (chosen) setSettings((s) => ({ ...s, clipsDir: chosen }));
     } catch {
       // user cancelled
     }
@@ -409,13 +392,8 @@ export default function App() {
         </div>
       )}
 
-      {firstRunDefault && !settings.clipsDir && (
-        <FirstRunModal
-          suggestedPath={firstRunDefault}
-          onAccept={commitClipsDir}
-          onPickCustom={pickClipsDirForFirstRun}
-          busy={firstRunBusy}
-        />
+      {showFirstRun && !settings.clipsDir && (
+        <FirstRunModal onPick={pickClipsDirForFirstRun} busy={firstRunBusy} />
       )}
     </div>
   );

@@ -16,7 +16,7 @@ Grab a build for your OS from the [latest release](https://github.com/brawnyr/gl
 > - **Windows** will show a SmartScreen warning — click *More info → Run anyway*.
 > - **macOS** will say the app "can't be opened" — right-click the app and choose *Open* the first time.
 
-On first launch, Glo creates a clips folder at `~/Documents/Glo Clips`. You can change it later via the picker in the clip library view.
+On first launch, Glo asks you to pick an existing folder where your clips should live. You can change it later via the picker in the clip library view.
 
 ## Use
 

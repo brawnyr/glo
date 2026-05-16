@@ -1,13 +1,11 @@
 import { CassetteSprite } from "../assets/pixel-sprites";
 
 type Props = {
-  suggestedPath: string;
-  onAccept: (path: string) => void;
-  onPickCustom: () => void;
+  onPick: () => void;
   busy: boolean;
 };
 
-export default function FirstRunModal({ suggestedPath, onAccept, onPickCustom, busy }: Props) {
+export default function FirstRunModal({ onPick, busy }: Props) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-roast-900/80 backdrop-blur-sm">
       <div className="panel max-w-lg w-[90vw] p-6 flex flex-col gap-4">
@@ -22,29 +20,16 @@ export default function FirstRunModal({ suggestedPath, onAccept, onPickCustom, b
         <div className="font-mono text-sm text-cream-200 leading-relaxed">
           When you press <kbd className="px-1 bg-roast-800 border border-roast-900">[</kbd> or{" "}
           <kbd className="px-1 bg-roast-800 border border-roast-900">]</kbd> while a station is playing,
-          glo saves the last 30 or 60 seconds as a WAV. Where should those clips live?
+          glo saves the last 30 or 60 seconds as a WAV. Pick an existing folder where those clips should live.
         </div>
 
-        <div className="px-3 py-2 bg-roast-900 border border-roast-800 font-mono text-xs text-cream-300 break-all">
-          {suggestedPath}
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-2">
-          <button
-            onClick={() => onAccept(suggestedPath)}
-            disabled={busy}
-            className="btn-pixel btn-crema flex-1 disabled:opacity-50"
-          >
-            use this folder
-          </button>
-          <button
-            onClick={onPickCustom}
-            disabled={busy}
-            className="btn-pixel flex-1 disabled:opacity-50"
-          >
-            choose different folder
-          </button>
-        </div>
+        <button
+          onClick={onPick}
+          disabled={busy}
+          className="btn-pixel btn-crema disabled:opacity-50"
+        >
+          choose folder
+        </button>
 
         <div className="font-mono text-[10px] text-cream-400/70 text-center">
           you can change this anytime from the clip library.

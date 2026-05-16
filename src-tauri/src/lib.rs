@@ -81,8 +81,6 @@ pub fn run() {
             commands::delete_clip,
             commands::open_clip_in_folder,
             commands::pick_clips_dir,
-            commands::default_clips_dir,
-            commands::ensure_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running glo");
