@@ -79,6 +79,16 @@ const TASTE_BUCKETS: { bucket: string; tags: string[] }[] = [
   { bucket: "electronic", tags: ["electronic", "house", "techno", "drum and bass", "edm", "ambient"] },
   { bucket: "lofi", tags: ["lofi", "lo-fi", "chillhop", "chillout"] },
   { bucket: "soul", tags: ["soul", "funk", "rnb", "neo soul", "motown"] },
+  { bucket: "kpop", tags: ["k-pop", "kpop", "korean"] },
+  { bucket: "jpop", tags: ["j-pop", "jpop", "j-rock", "city pop", "japanese"] },
+  { bucket: "cpop", tags: ["mandopop", "cantopop", "c-pop", "chinese"] },
+  { bucket: "desi", tags: ["bollywood", "hindi", "indian", "punjabi", "tamil"] },
+  { bucket: "sea", tags: ["thai", "indonesian", "vietnamese", "filipino", "malay"] },
+  { bucket: "latin", tags: ["latin", "reggaeton", "salsa", "cumbia", "bachata"] },
+  { bucket: "brazil", tags: ["brazilian", "bossa nova", "mpb", "samba"] },
+  { bucket: "afro", tags: ["afrobeat", "amapiano", "afropop", "highlife"] },
+  { bucket: "reggae", tags: ["reggae", "dub", "dancehall"] },
+  { bucket: "mena", tags: ["arabic", "turkish", "persian", "iranian"] },
 ];
 
 // Non-music markers — dropped from the recommended feed.
@@ -100,11 +110,12 @@ function isMusicStation(s: Station): boolean {
   return true;
 }
 
-async function searchByTag(base: string, tag: string, limit: number): Promise<Station[]> {
+async function searchByTag(base: string, tag: string, limit: number, offset = 0): Promise<Station[]> {
   const body = new URLSearchParams();
   body.set("tag", tag);
   body.set("hidebroken", "true");
   body.set("limit", String(limit));
+  body.set("offset", String(offset));
   body.set("order", "votes");
   body.set("reverse", "true");
   try {
@@ -120,13 +131,14 @@ async function searchByTag(base: string, tag: string, limit: number): Promise<St
   }
 }
 
-export async function recommendedStations(limit = 80): Promise<Station[]> {
+export async function recommendedStations(limit = 80, page = 0): Promise<Station[]> {
   const base = await pickMirror();
   const perTag = 25;
+  const tagOffset = page * perTag;
 
   const bucketResults = await Promise.all(
     TASTE_BUCKETS.map(async (b) => {
-      const pools = await Promise.all(b.tags.map((t) => searchByTag(base, t, perTag)));
+      const pools = await Promise.all(b.tags.map((t) => searchByTag(base, t, perTag, tagOffset)));
       const seen = new Set<string>();
       const merged: Station[] = [];
       for (const pool of pools) {

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Station } from "../types";
 import { HeartSprite, SignalSprite } from "../assets/pixel-sprites";
 
@@ -8,9 +9,40 @@ type Props = {
   favorites: Set<string>;
   onSelect: (s: Station) => void;
   onToggleFavorite: (s: Station) => void;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+  loadingMore?: boolean;
 };
 
-export default function StationList({ stations, current, loading, favorites, onSelect, onToggleFavorite }: Props) {
+export default function StationList({
+  stations,
+  current,
+  loading,
+  favorites,
+  onSelect,
+  onToggleFavorite,
+  onLoadMore,
+  hasMore,
+  loadingMore,
+}: Props) {
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!onLoadMore || !hasMore) return;
+    const el = sentinelRef.current;
+    const root = scrollRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) onLoadMore();
+      },
+      { root: root ?? null, rootMargin: "400px" }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [onLoadMore, hasMore, stations.length]);
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center text-cream-300 font-pixel">
@@ -26,7 +58,7 @@ export default function StationList({ stations, current, loading, favorites, onS
     );
   }
   return (
-    <div className="flex-1 overflow-y-auto pr-1">
+    <div ref={scrollRef} className="flex-1 overflow-y-auto pr-1">
       <ul className="grid grid-cols-1 lg:grid-cols-2 gap-2">
         {stations.map((s) => {
           const isPlaying = current?.stationuuid === s.stationuuid;
@@ -86,6 +118,11 @@ export default function StationList({ stations, current, loading, favorites, onS
           );
         })}
       </ul>
+      {hasMore && (
+        <div ref={sentinelRef} className="py-4 text-center text-cream-400 font-pixel text-xs">
+          {loadingMore ? <span className="caret">brewing more</span> : ""}
+        </div>
+      )}
     </div>
   );
 }

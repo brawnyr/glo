@@ -21,6 +21,10 @@ export default function App() {
   const [filter, setFilter] = useState<FilterState>({ query: "", country: "", language: "", tag: "" });
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const PAGE_SIZE = 80;
   const [current, setCurrent] = useState<Station | null>(null);
   const [currentTrack, setCurrentTrack] = useState<string | null>(null);
   const [proxyPort, setProxyPort] = useState<number | null>(null);
@@ -98,45 +102,81 @@ export default function App() {
     })();
   }, [settings.clipsDir, clipsRefresh]);
 
-  useEffect(() => {
-    setLoading(true);
-    recommendedStations(80)
-      .then((rows) => setStations(rows))
-      .catch(() => setStations([]))
-      .finally(() => setLoading(false));
-  }, []);
+  const isFilterEmpty = !filter.query && !filter.country && !filter.language && !filter.tag;
 
+  // Initial / filter-change fetch: reset to page 0.
   useEffect(() => {
     if (view !== "all") return;
     if (searchTimer.current) window.clearTimeout(searchTimer.current);
-    const isEmpty = !filter.query && !filter.country && !filter.language && !filter.tag;
-    if (isEmpty) {
-      setLoading(true);
-      recommendedStations(80)
-        .then((rows) => setStations(rows))
-        .catch(() => setStations([]))
-        .finally(() => setLoading(false));
-      return;
-    }
     setLoading(true);
-    searchTimer.current = window.setTimeout(() => {
-      searchStations({
-        name: filter.query || undefined,
-        country: filter.country || undefined,
-        language: filter.language || undefined,
-        tag: filter.tag || undefined,
-        limit: 80,
-        order: "votes",
-        reverse: true,
+    setStations([]);
+    setPage(0);
+    setHasMore(true);
+
+    const fetchFirstPage = () => {
+      const p = isFilterEmpty
+        ? recommendedStations(PAGE_SIZE, 0)
+        : searchStations({
+            name: filter.query || undefined,
+            country: filter.country || undefined,
+            language: filter.language || undefined,
+            tag: filter.tag || undefined,
+            limit: PAGE_SIZE,
+            offset: 0,
+            order: "votes",
+            reverse: true,
+          });
+      p.then((rows) => {
+        setStations(rows);
+        if (rows.length < PAGE_SIZE) setHasMore(false);
       })
-        .then((rows) => setStations(rows))
-        .catch(() => setStations([]))
+        .catch(() => {
+          setStations([]);
+          setHasMore(false);
+        })
         .finally(() => setLoading(false));
-    }, 280);
+    };
+
+    if (isFilterEmpty) {
+      fetchFirstPage();
+    } else {
+      searchTimer.current = window.setTimeout(fetchFirstPage, 280);
+    }
     return () => {
       if (searchTimer.current) window.clearTimeout(searchTimer.current);
     };
-  }, [filter, view]);
+  }, [filter, view, isFilterEmpty]);
+
+  const loadMore = useCallback(async () => {
+    if (loading || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    try {
+      const rows = isFilterEmpty
+        ? await recommendedStations(PAGE_SIZE, nextPage)
+        : await searchStations({
+            name: filter.query || undefined,
+            country: filter.country || undefined,
+            language: filter.language || undefined,
+            tag: filter.tag || undefined,
+            limit: PAGE_SIZE,
+            offset: nextPage * PAGE_SIZE,
+            order: "votes",
+            reverse: true,
+          });
+      setStations((prev) => {
+        const seen = new Set(prev.map((s) => s.stationuuid));
+        const fresh = rows.filter((s) => !seen.has(s.stationuuid));
+        if (fresh.length === 0) setHasMore(false);
+        return fresh.length === 0 ? prev : [...prev, ...fresh];
+      });
+      setPage(nextPage);
+    } catch {
+      setHasMore(false);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loading, loadingMore, hasMore, page, isFilterEmpty, filter]);
 
   const favoritesSet = useMemo(() => new Set(settings.favorites), [settings.favorites]);
   const visibleStations = useMemo(() => {
@@ -282,9 +322,9 @@ export default function App() {
               <div className="font-pixel text-xs uppercase tracking-widest text-cream-200">
                 {view === "library" ? "clip library" : view === "favorites" ? "favorites" : "stations"}
               </div>
-              <div className="font-mono text-[10px] text-cream-400">
-                {view !== "library" ? `${visibleStations.length} stations` : `${clipCount} clips`}
-              </div>
+              {view === "library" && (
+                <div className="font-mono text-[10px] text-cream-400">{clipCount} clips</div>
+              )}
               <div className="ml-auto font-mono text-[10px] text-cream-400">
                 <kbd className="px-1 bg-roast-800 border border-roast-900">space</kbd> play/pause ·{" "}
                 <kbd className="px-1 bg-roast-800 border border-roast-900">[</kbd> save 30s ·{" "}
@@ -308,6 +348,9 @@ export default function App() {
                 favorites={favoritesSet}
                 onSelect={selectStation}
                 onToggleFavorite={toggleFav}
+                onLoadMore={view === "all" ? loadMore : undefined}
+                hasMore={view === "all" && hasMore}
+                loadingMore={loadingMore}
               />
             )}
           </section>
