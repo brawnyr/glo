@@ -45,14 +45,6 @@ export default function ClipLibrary({ clipsDir, refreshKey, onPickDir, onChanged
     }
   };
 
-  const reveal = async (c: Clip) => {
-    try {
-      await invoke("open_clip_in_folder", { path: c.path });
-    } catch (e) {
-      setErr(String((e as Error)?.message || e));
-    }
-  };
-
   if (!clipsDir) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 text-cream-300">
@@ -96,19 +88,14 @@ export default function ClipLibrary({ clipsDir, refreshKey, onPickDir, onChanged
               </div>
               <div className="font-mono text-[10px] text-cream-400/60 truncate">{c.fileName}</div>
             </div>
-            <div className="flex gap-1 items-center">
-              <button onClick={() => reveal(c)} className="btn-pixel" title="show in file manager">
-                reveal
-              </button>
-              <button
-                onClick={() => remove(c)}
-                className="btn-del"
-                title="delete file"
-                aria-label="delete clip"
-              >
-                <TrashSprite size={18} />
-              </button>
-            </div>
+            <button
+              onClick={() => remove(c)}
+              className="btn-del"
+              title="delete file"
+              aria-label="delete clip"
+            >
+              <TrashSprite size={18} />
+            </button>
           </li>
         ))}
       </ul>

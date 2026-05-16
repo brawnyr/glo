@@ -24,10 +24,10 @@ pub fn get_proxy_port(state: State<'_, Arc<AppState>>) -> u16 {
 
 #[tauri::command]
 pub fn default_clips_dir() -> Result<String, String> {
-    let dir = dirs::audio_dir()
-        .or_else(dirs::home_dir)
-        .ok_or_else(|| "no audio/home dir".to_string())?
-        .join("Glo");
+    let dir = dirs::home_dir()
+        .ok_or_else(|| "no home dir".to_string())?
+        .join("sample library")
+        .join("radio");
     Ok(dir.to_string_lossy().to_string())
 }
 

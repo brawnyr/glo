@@ -6,18 +6,10 @@ import { CassetteSprite } from "../assets/pixel-sprites";
 type Props = {
   rb: RollingBuffer | null;
   station: Station | null;
-  clipsDir: string | null;
-  onPickDir: () => void;
   onSample: (seconds: number, fromEvent?: { clientX: number; clientY: number }) => void;
 };
 
-export default function SampleControls({
-  rb,
-  station,
-  clipsDir,
-  onPickDir,
-  onSample,
-}: Props) {
+export default function SampleControls({ rb, station, onSample }: Props) {
   const sample = (seconds: number, ev: MouseEvent<HTMLButtonElement>) => {
     onSample(seconds, { clientX: ev.clientX, clientY: ev.clientY });
   };
@@ -42,23 +34,6 @@ export default function SampleControls({
           ))}
         </div>
       </div>
-
-      <div className="ml-auto flex flex-col items-end gap-1 relative">
-        <div className="font-pixel text-[10px] uppercase tracking-widest text-cream-400">save to</div>
-        <button
-          onClick={onPickDir}
-          className="btn-pixel max-w-[260px] truncate"
-          title={clipsDir || ""}
-        >
-          {clipsDir ? truncMid(clipsDir, 36) : "choose folder…"}
-        </button>
-      </div>
     </div>
   );
-}
-
-function truncMid(s: string, max: number) {
-  if (s.length <= max) return s;
-  const half = Math.floor((max - 1) / 2);
-  return s.slice(0, half) + "…" + s.slice(s.length - half);
 }

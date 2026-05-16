@@ -14,8 +14,10 @@ import { MugSprite } from "./assets/pixel-sprites";
 
 type View = "all" | "favorites" | "library";
 
+const CLIPS_DIR = "C:\\Users\\brawny\\sample library\\radio";
+
 export default function App() {
-  const [settings, setSettings] = useState<Settings>(() => loadSettings());
+  const [settings, setSettings] = useState<Settings>(() => ({ ...loadSettings(), clipsDir: CLIPS_DIR }));
   const [filter, setFilter] = useState<FilterState>({ query: "", country: "", language: "", tag: "" });
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(false);
@@ -46,17 +48,13 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      if (settings.clipsDir) return;
       if (!(await isTauri())) return;
       try {
-        const dir = await invoke<string>("default_clips_dir");
-        await invoke("ensure_dir", { path: dir });
-        setSettings((s) => ({ ...s, clipsDir: dir }));
+        await invoke("ensure_dir", { path: CLIPS_DIR });
       } catch {
         // ignore
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -275,8 +273,6 @@ export default function App() {
           <SampleControls
             rb={rb}
             station={current}
-            clipsDir={settings.clipsDir}
-            onPickDir={pickDir}
             onSample={(seconds, ev) => sampleLast(seconds, ev)}
           />
 
