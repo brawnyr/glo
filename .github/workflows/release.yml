@@ -65,6 +65,6 @@ jobs:
             **Note:** these are unsigned builds. Windows SmartScreen and macOS Gatekeeper
             will warn on first launch — click "More info → Run anyway" on Windows, or
             right-click → Open on macOS, to bypass.
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
