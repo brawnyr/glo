@@ -25,7 +25,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self' 'unsafe-inline' ipc: http://ipc.localhost; img-src * data: blob:; media-src 'self' blob: http://127.0.0.1:* http://localhost:*; connect-src 'self' ipc: http://ipc.localhost https://*.api.radio-browser.info http://127.0.0.1:* http://localhost:*; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com"
     }
   },
   "bundle": {

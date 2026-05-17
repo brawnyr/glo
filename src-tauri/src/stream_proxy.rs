@@ -24,12 +24,13 @@ use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Method, Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
-use reqwest::Client;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 use tokio::net::{lookup_host, TcpListener};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use url::Url;
+
+use crate::USER_AGENT;
 
 type BoxedBody = BoxBody<Bytes, std::io::Error>;
 
@@ -269,7 +270,6 @@ where
 
 async fn handle(
     req: Request<Incoming>,
-    _http: Client,
     app: AppHandle,
     sem: Arc<Semaphore>,
 ) -> Result<Response<BoxedBody>, Infallible> {
@@ -357,7 +357,7 @@ async fn handle(
     // spin up a small one here. (Cost is negligible next to a streaming
     // radio fetch.)
     let pinned_client = match reqwest::Client::builder()
-        .user_agent("Glo/0.1")
+        .user_agent(USER_AGENT)
         .resolve_to_addrs(&host, &addrs)
         .build()
     {
@@ -476,7 +476,9 @@ where
 }
 
 /// Spawns the proxy on a random free port and returns (port, thread handle).
-pub fn spawn(http: Client, app: AppHandle) -> (u16, JoinHandle<()>) {
+/// Each handler builds its own reqwest client per-request because DNS gets
+/// pinned per upstream host (see `resolve_to_addrs` in `handle`).
+pub fn spawn(app: AppHandle) -> (u16, JoinHandle<()>) {
     let (port_tx, port_rx) = std::sync::mpsc::channel::<u16>();
 
     let handle = std::thread::Builder::new()
@@ -504,7 +506,6 @@ pub fn spawn(http: Client, app: AppHandle) -> (u16, JoinHandle<()>) {
                         }
                     };
                     let io = TokioIo::new(stream);
-                    let client = http.clone();
                     let app_h = app.clone();
                     let sem = sem.clone();
                     tokio::spawn(async move {
@@ -512,7 +513,7 @@ pub fn spawn(http: Client, app: AppHandle) -> (u16, JoinHandle<()>) {
                             .serve_connection(
                                 io,
                                 service_fn(move |req| {
-                                    handle(req, client.clone(), app_h.clone(), sem.clone())
+                                    handle(req, app_h.clone(), sem.clone())
                                 }),
                             )
                             .await;

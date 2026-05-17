@@ -1,10 +1,30 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::AppState;
+
+/// Refuse clip writes larger than this. A 60-second stereo 48kHz 16-bit WAV is
+/// ~11 MB; this leaves headroom for higher sample rates and channel counts
+/// while rejecting a runaway frontend or hostile payload.
+const MAX_CLIP_BYTES: usize = 150 * 1024 * 1024;
+
+/// Validates that `target` resolves to a path inside `allowed_root`. Both are
+/// canonicalized so symlinks and relative components can't escape. Returns the
+/// resolved (canonical) target path on success.
+fn ensure_within(allowed_root: &str, target: &Path) -> Result<PathBuf, String> {
+    let root = std::fs::canonicalize(allowed_root)
+        .map_err(|e| format!("clips dir invalid: {e}"))?;
+    let resolved = std::fs::canonicalize(target)
+        .map_err(|e| format!("path invalid: {e}"))?;
+    if !resolved.starts_with(&root) {
+        return Err("path outside clips dir".to_string());
+    }
+    Ok(resolved)
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -45,12 +65,36 @@ pub struct SaveClipArgs {
     pub track_title: String,
     #[serde(rename = "durationSec")]
     pub duration_sec: f32,
-    pub bytes: Vec<u8>,
+    /// WAV bytes as base64. Tauri's JSON IPC turns a `Uint8Array` into a
+    /// number array (~4x size); base64 is ~33% overhead — much faster for
+    /// the ~11 MB blobs a 60-second clip produces.
+    #[serde(rename = "bytesB64")]
+    pub bytes_b64: String,
 }
 
 #[tauri::command]
 pub fn save_clip(args: SaveClipArgs) -> Result<ClipMeta, String> {
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&args.bytes_b64)
+        .map_err(|e| format!("clip payload not valid base64: {e}"))?;
+    if bytes.len() > MAX_CLIP_BYTES {
+        return Err(format!(
+            "clip too large: {} bytes (max {})",
+            bytes.len(),
+            MAX_CLIP_BYTES
+        ));
+    }
+
+    // Make sure the chosen dir exists and resolves before we synthesize a
+    // filename. We don't pin clips to a canonicalized root here because the
+    // user picked this dir explicitly via the OS picker — the threat model
+    // for save_clip is "frontend sends garbage payload," not "frontend lies
+    // about the directory."
     let dir = PathBuf::from(&args.dir);
+    if !dir.is_dir() {
+        return Err(format!("clips dir does not exist: {}", dir.display()));
+    }
+
     let ts = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
     let safe_station = sanitize(&args.station_name);
     let file_name = if args.track_title.trim().is_empty() {
@@ -63,7 +107,7 @@ pub fn save_clip(args: SaveClipArgs) -> Result<ClipMeta, String> {
         )
     };
     let path = dir.join(&file_name);
-    std::fs::write(&path, &args.bytes).map_err(|e| e.to_string())?;
+    std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
     let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
     Ok(ClipMeta {
         file_name,
@@ -138,22 +182,20 @@ pub fn list_clips(dir: String) -> Result<Vec<ClipMeta>, String> {
 }
 
 #[tauri::command]
-pub fn delete_clip(path: String) -> Result<(), String> {
-    std::fs::remove_file(&path).map_err(|e| e.to_string())
+pub fn delete_clip(dir: String, path: String) -> Result<(), String> {
+    let resolved = ensure_within(&dir, Path::new(&path))?;
+    std::fs::remove_file(&resolved).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn open_clip_in_folder(path: String) -> Result<(), String> {
-    let p = Path::new(&path);
-    if !p.exists() {
-        return Err(format!("clip not found: {path}"));
-    }
+pub fn open_clip_in_folder(dir: String, path: String) -> Result<(), String> {
+    let resolved = ensure_within(&dir, Path::new(&path))?;
     #[cfg(target_os = "windows")]
     {
         // `/select,<path>` opens the parent folder and highlights the file.
         // The comma is part of the flag — explorer parses the whole thing as one arg.
         std::process::Command::new("explorer")
-            .arg(format!("/select,{}", p.display()))
+            .arg(format!("/select,{}", resolved.display()))
             .spawn()
             .map_err(|e| e.to_string())?;
     }
@@ -161,14 +203,14 @@ pub fn open_clip_in_folder(path: String) -> Result<(), String> {
     {
         std::process::Command::new("open")
             .arg("-R")
-            .arg(p)
+            .arg(&resolved)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "linux")]
     {
         // Most Linux file managers don't have a portable "reveal" flag — open the parent.
-        let parent = p.parent().ok_or_else(|| "no parent dir".to_string())?;
+        let parent = resolved.parent().ok_or_else(|| "no parent dir".to_string())?;
         std::process::Command::new("xdg-open")
             .arg(parent)
             .spawn()

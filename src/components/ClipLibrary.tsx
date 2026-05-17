@@ -36,8 +36,9 @@ export default function ClipLibrary({ clipsDir, refreshKey, onPickDir, onChanged
 
   const remove = async (c: Clip) => {
     if (!confirm(`delete ${c.fileName}?`)) return;
+    if (!clipsDir) return;
     try {
-      await invoke("delete_clip", { path: c.path });
+      await invoke("delete_clip", { dir: clipsDir, path: c.path });
       setClips((cs) => cs.filter((x) => x.path !== c.path));
       onChanged();
     } catch (e) {

@@ -45,7 +45,9 @@ export function useClipSampler({
             stationName: station.name,
             trackTitle: currentTrack || "",
             durationSec: snap.channels[0].length / snap.sampleRate,
-            bytes: Array.from(wav),
+            // Base64 keeps the IPC payload ~3x smaller than `Array.from(wav)`,
+            // which JSON-encodes each byte as a decimal number ("128," = 4 chars).
+            bytesB64: uint8ToBase64(wav),
           },
         });
         onClipSaved?.(fromEvent);
@@ -57,4 +59,19 @@ export function useClipSampler({
   );
 
   return { sample };
+}
+
+// Chunked to dodge "argument too long" on apply-style spreads of large arrays.
+// `btoa` operates on a binary string (one code unit per byte), so we hand it
+// a string built in 32k slices.
+function uint8ToBase64(bytes: Uint8Array): string {
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(
+      null,
+      Array.from(bytes.subarray(i, i + chunkSize))
+    );
+  }
+  return btoa(binary);
 }

@@ -97,16 +97,23 @@ class RollingBufferProcessor extends AudioWorkletProcessor {
       b1[widx] = rv;
       widx++;
       if (widx >= cap) widx = 0;
-      const a = lv > 0 ? lv : -lv;
-      if (a > peak) peak = a;
-      sumSq += lv * lv;
+      // Peak is max-of-channels so a hot-right mix doesn't read as quieter
+      // than the same energy panned center.
+      const al = lv > 0 ? lv : -lv;
+      const ar = rv > 0 ? rv : -rv;
+      if (al > peak) peak = al;
+      if (ar > peak) peak = ar;
+      sumSq += lv * lv + rv * rv;
     }
 
     this.writeIdx = widx;
     this.filled = Math.min(cap, this.filled + frames);
     this.levelPeak = peak;
     this.levelSumSq = sumSq;
-    this.levelFrames += frames;
+    // Two channels' worth of energy went into sumSq per frame, so divide by
+    // 2*frames to get a per-sample mean-square (matches the typical "stereo
+    // RMS" reading a DAW meter shows).
+    this.levelFrames += frames * 2;
     this.levelCounter += frames;
 
     // Emit ~10/s

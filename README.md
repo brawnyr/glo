@@ -21,6 +21,7 @@ On first launch, Glo asks you to pick an existing folder where your clips should
 ## Use
 
 - `Space` — play/pause
+- `;` — save last 15 s
 - `[` — save last 30 s
 - `]` — save last 60 s
 - `l` — clip library

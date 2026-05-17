@@ -277,6 +277,9 @@ export default function App() {
       if (e.key === " ") {
         e.preventDefault();
         playerRef.current?.toggle();
+      } else if (e.key === ";") {
+        e.preventDefault();
+        sampleLast(15);
       } else if (e.key === "[") {
         e.preventDefault();
         sampleLast(30);
@@ -360,6 +363,7 @@ export default function App() {
               )}
               <div className="ml-auto font-mono text-[10px] text-cream-400">
                 <kbd className="px-1 bg-roast-800 border border-roast-900">space</kbd> play/pause ·{" "}
+                <kbd className="px-1 bg-roast-800 border border-roast-900">;</kbd> save 15s ·{" "}
                 <kbd className="px-1 bg-roast-800 border border-roast-900">[</kbd> save 30s ·{" "}
                 <kbd className="px-1 bg-roast-800 border border-roast-900">]</kbd> save 60s ·{" "}
                 <kbd className="px-1 bg-roast-800 border border-roast-900">l</kbd> library

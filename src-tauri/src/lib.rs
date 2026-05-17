@@ -3,15 +3,14 @@ mod stream_proxy;
 
 use std::sync::Arc;
 
-use tauri::menu::{Menu, MenuItem};
-use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 use tauri::{Manager, WindowEvent};
 
 #[derive(Clone)]
 pub struct AppState {
-    pub http: reqwest::Client,
     pub proxy_port: u16,
 }
+
+const USER_AGENT: &str = concat!("Glo/", env!("CARGO_PKG_VERSION"));
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -20,55 +19,19 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let http = reqwest::Client::builder()
-                .user_agent("Glo/0.1")
-                .build()
-                .expect("reqwest client");
-            let (port, handle) = stream_proxy::spawn(http.clone(), app.handle().clone());
+            let (port, handle) = stream_proxy::spawn(app.handle().clone());
             log::info!("stream proxy listening on http://127.0.0.1:{port}");
             // Proxy thread runs for the lifetime of the process.
             std::mem::forget(handle);
 
-            let state = AppState { http, proxy_port: port };
-            app.manage(Arc::new(state));
-
-            // System tray keeps audio playing when the window is hidden.
-            let show_item = MenuItem::with_id(app, "show", "Show window", true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(app, "quit", "Quit Glo", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
-            let mut tray_builder = TrayIconBuilder::new()
-                .menu(&menu)
-                .tooltip("Glo")
-                .show_menu_on_left_click(false);
-            if let Some(icon) = app.default_window_icon().cloned() {
-                tray_builder = tray_builder.icon(icon);
-            }
-            let _tray = tray_builder
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
-                        }
-                    }
-                    "quit" => {
-                        app.exit(0);
-                    }
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click { .. } = event {
-                        if let Some(w) = tray.app_handle().get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
-                        }
-                    }
-                })
-                .build(app)?;
+            app.manage(Arc::new(AppState { proxy_port: port }));
 
             Ok(())
         })
         .on_window_event(|window, event| {
+            // Quit when the user closes the window — including on macOS, where
+            // Tauri's default is to hide. Glo is a single-window app and the
+            // tray that justified background audio is gone.
             if let WindowEvent::CloseRequested { .. } = event {
                 window.app_handle().exit(0);
             }
