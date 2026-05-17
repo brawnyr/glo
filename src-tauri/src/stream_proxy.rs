@@ -4,7 +4,10 @@
 //     http://127.0.0.1:<port>/stream?url=<encoded upstream URL>
 //
 // We also request ICY inline metadata, strip it from the audio bytes before
-// forwarding, and emit a `current-track` Tauri event on title changes.
+// forwarding, and emit a `current-track` Tauri event on title changes. The
+// stream's self-reported name (icy-name response header) is forwarded as a
+// `station-name` event so the UI can show what the upstream actually
+// identifies as, instead of trusting the radio-browser directory entry.
 
 use std::convert::Infallible;
 use std::net::{IpAddr, SocketAddr};
@@ -37,6 +40,11 @@ const MAX_CONCURRENT_STREAMS: usize = 4;
 #[derive(Serialize, Clone)]
 struct TrackEvent {
     title: String,
+}
+
+#[derive(Serialize, Clone)]
+struct StationNameEvent {
+    name: String,
 }
 
 fn cors_headers(resp: &mut Response<BoxedBody>) {
@@ -388,6 +396,19 @@ async fn handle(
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.parse().ok())
         .filter(|n: &usize| *n > 0 && *n < 1024 * 1024);
+
+    // The stream's self-reported name. radio-browser directory entries are
+    // community-edited and frequently drift from what the upstream operator
+    // is actually broadcasting, so prefer this when present.
+    if let Some(name) = upstream_resp
+        .headers()
+        .get("icy-name")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+    {
+        let _ = app.emit("station-name", StationNameEvent { name });
+    }
 
     let body: BoxedBody = if let Some(n) = metaint {
         log::info!("upstream serves ICY metadata every {n} bytes");

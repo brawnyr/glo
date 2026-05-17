@@ -1,6 +1,6 @@
 [package]
 name = "glo"
-version = "0.1.0"
+version = "0.2.0"
 description = "A pixel-pretty desktop radio sampler"
 edition = "2021"
 rust-version = "1.75"

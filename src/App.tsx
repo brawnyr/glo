@@ -26,6 +26,7 @@ export default function App() {
   const PAGE_SIZE = 80;
   const [current, setCurrent] = useState<Station | null>(null);
   const [currentTrack, setCurrentTrack] = useState<string | null>(null);
+  const [streamName, setStreamName] = useState<string | null>(null);
   const [proxyPort, setProxyPort] = useState<number | null>(null);
   const [proxyError, setProxyError] = useState<string | null>(null);
   const [view, setView] = useState<View>("all");
@@ -86,28 +87,36 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    let unlistenFn: (() => void) | null = null;
+    const unlisteners: Array<() => void> = [];
     (async () => {
       if (!(await isTauri())) return;
       if (cancelled) return;
       try {
-        const u = await listen<{ title: string }>("current-track", (e) => {
+        const uTrack = await listen<{ title: string }>("current-track", (e) => {
           setCurrentTrack(e.payload?.title || null);
         });
-        if (cancelled) u();
-        else unlistenFn = u;
+        const uName = await listen<{ name: string }>("station-name", (e) => {
+          setStreamName(e.payload?.name || null);
+        });
+        if (cancelled) {
+          uTrack();
+          uName();
+        } else {
+          unlisteners.push(uTrack, uName);
+        }
       } catch {
         // ignore
       }
     })();
     return () => {
       cancelled = true;
-      unlistenFn?.();
+      unlisteners.forEach((u) => u());
     };
   }, []);
 
   useEffect(() => {
     setCurrentTrack(null);
+    setStreamName(null);
   }, [current?.stationuuid]);
 
   useEffect(() => {
@@ -327,6 +336,9 @@ export default function App() {
             proxyError={proxyError}
             volume={settings.volume}
             currentTrack={currentTrack}
+            streamName={streamName}
+            isFavorite={!!current && favoritesSet.has(current.stationuuid)}
+            onToggleFavorite={() => current && toggleFav(current)}
             onVolumeChange={(v) => setSettings((s) => ({ ...s, volume: v }))}
             onBufferReady={setRb}
           />

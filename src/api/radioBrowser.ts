@@ -68,27 +68,24 @@ export async function searchStations(params: SearchParams): Promise<Station[]> {
   return (await r.json()) as Station[];
 }
 
-// Each bucket is fetched independently then round-robin merged so the top of
-// the feed always shows genre variety instead of one tag dominating.
-const TASTE_BUCKETS: { bucket: string; tags: string[] }[] = [
-  { bucket: "trap", tags: ["trap", "hip hop", "rap", "drill"] },
-  { bucket: "heavy", tags: ["metal", "heavy metal", "hard rock", "stoner rock", "doom metal"] },
-  { bucket: "jazz", tags: ["jazz", "smooth jazz", "bebop", "jazz fusion"] },
-  { bucket: "classic", tags: ["classic rock", "psychedelic rock", "blues rock", "60s", "70s"] },
-  { bucket: "blues", tags: ["blues"] },
-  { bucket: "electronic", tags: ["electronic", "house", "techno", "drum and bass", "edm", "ambient"] },
-  { bucket: "lofi", tags: ["lofi", "lo-fi", "chillhop", "chillout"] },
-  { bucket: "soul", tags: ["soul", "funk", "rnb", "neo soul", "motown"] },
-  { bucket: "kpop", tags: ["k-pop", "kpop", "korean"] },
-  { bucket: "jpop", tags: ["j-pop", "jpop", "j-rock", "city pop", "japanese"] },
-  { bucket: "cpop", tags: ["mandopop", "cantopop", "c-pop", "chinese"] },
-  { bucket: "desi", tags: ["bollywood", "hindi", "indian", "punjabi", "tamil"] },
-  { bucket: "sea", tags: ["thai", "indonesian", "vietnamese", "filipino", "malay"] },
-  { bucket: "latin", tags: ["latin", "reggaeton", "salsa", "cumbia", "bachata"] },
-  { bucket: "brazil", tags: ["brazilian", "bossa nova", "mpb", "samba"] },
-  { bucket: "afro", tags: ["afrobeat", "amapiano", "afropop", "highlife"] },
-  { bucket: "reggae", tags: ["reggae", "dub", "dancehall"] },
-  { bucket: "mena", tags: ["arabic", "turkish", "persian", "iranian"] },
+// Buckets are fetched independently then round-robin merged. `weight` sets
+// how many slots a bucket gets per cycle — trap and lofi double up because
+// the user wants those dominating the top of the feed. `order` lets the
+// "newness-skewed" buckets (trap/rap, bass) sort by recent clickcount instead
+// of lifetime votes, which surfaces streams people are actively listening to.
+type Bucket = {
+  bucket: string;
+  tags: string[];
+  weight?: number;
+  order?: "votes" | "clickcount";
+};
+const TASTE_BUCKETS: Bucket[] = [
+  { bucket: "trap", tags: ["trap", "hip hop", "rap", "drill"], weight: 3, order: "clickcount" },
+  { bucket: "lofi", tags: ["lofi", "lo-fi", "chillhop", "chillout"], weight: 3 },
+  { bucket: "bass", tags: ["dubstep", "bass", "drum and bass", "dnb"], weight: 2, order: "clickcount" },
+  { bucket: "classic", tags: ["classic rock", "psychedelic rock", "blues rock", "60s", "70s"], weight: 2 },
+  { bucket: "blues", tags: ["blues", "delta blues"], weight: 1 },
+  { bucket: "oldies", tags: ["soul", "funk", "rnb", "motown", "oldies"], weight: 1 },
 ];
 
 // Non-music markers — dropped from the recommended feed.
@@ -110,13 +107,19 @@ function isMusicStation(s: Station): boolean {
   return true;
 }
 
-async function searchByTag(base: string, tag: string, limit: number, offset = 0): Promise<Station[]> {
+async function searchByTag(
+  base: string,
+  tag: string,
+  limit: number,
+  offset = 0,
+  order: "votes" | "clickcount" = "votes",
+): Promise<Station[]> {
   const body = new URLSearchParams();
   body.set("tag", tag);
   body.set("hidebroken", "true");
   body.set("limit", String(limit));
   body.set("offset", String(offset));
-  body.set("order", "votes");
+  body.set("order", order);
   body.set("reverse", "true");
   try {
     const r = await fetch(`${base}/json/stations/search`, {
@@ -142,7 +145,9 @@ export async function recommendedStations(limit = 80, page = 0): Promise<Station
 
   const bucketResults = await Promise.all(
     TASTE_BUCKETS.map(async (b) => {
-      const pools = await Promise.all(b.tags.map((t) => searchByTag(base, t, perTag, tagOffset)));
+      const pools = await Promise.all(
+        b.tags.map((t) => searchByTag(base, t, perTag, tagOffset, b.order)),
+      );
       const seen = new Set<string>();
       const merged: Station[] = [];
       for (const pool of pools) {
@@ -153,35 +158,47 @@ export async function recommendedStations(limit = 80, page = 0): Promise<Station
           merged.push(s);
         }
       }
+      const sortKey: "clickcount" | "votes" = b.order === "clickcount" ? "clickcount" : "votes";
       merged.sort(
-        (a, b) => (b.votes ?? 0) - (a.votes ?? 0) || (b.bitrate ?? 0) - (a.bitrate ?? 0)
+        (a, b2) =>
+          (b2[sortKey] ?? 0) - (a[sortKey] ?? 0) ||
+          (b2.bitrate ?? 0) - (a.bitrate ?? 0),
       );
-      return windowStart > 0 ? merged.slice(windowStart) : merged;
+      const trimmed = windowStart > 0 ? merged.slice(windowStart) : merged;
+      return { stations: trimmed, weight: b.weight ?? 1 };
     })
   );
 
-  // Shuffle bucket iteration order so the first ~N slots aren't always
-  // jazz → heavy → trap → … in fixed source order.
+  // Shuffle bucket iteration order so the first slots aren't always in
+  // fixed source order — but only on page 0; later pages stay stable so
+  // pagination doesn't re-jumble what the user already scrolled past.
   if (page === 0) {
     bucketResults.sort(() => Math.random() - 0.5);
   }
 
   const picked = new Set<string>();
   const out: Station[] = [];
+  // Per-bucket read cursors so weighted picks advance independently.
+  const cursors = bucketResults.map(() => 0);
   let added = true;
-  let idx = 0;
   while (added && out.length < limit) {
     added = false;
-    for (const bucket of bucketResults) {
-      const next = bucket[idx];
-      if (!next) continue;
-      if (picked.has(next.stationuuid)) continue;
-      picked.add(next.stationuuid);
-      out.push(next);
-      added = true;
+    for (let i = 0; i < bucketResults.length; i++) {
+      const { stations, weight } = bucketResults[i];
+      for (let w = 0; w < weight; w++) {
+        // Skip past already-picked stations (dupes across tag pools).
+        while (cursors[i] < stations.length && picked.has(stations[cursors[i]].stationuuid)) {
+          cursors[i]++;
+        }
+        if (cursors[i] >= stations.length) break;
+        const next = stations[cursors[i]++];
+        picked.add(next.stationuuid);
+        out.push(next);
+        added = true;
+        if (out.length >= limit) break;
+      }
       if (out.length >= limit) break;
     }
-    idx++;
   }
   return out;
 }

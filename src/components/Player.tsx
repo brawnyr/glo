@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Station } from "../types";
 import { BUFFER_SECONDS, LevelData, RollingBuffer } from "../audio/rollingBuffer";
-import { PauseSprite, PlaySprite } from "../assets/pixel-sprites";
+import { HeartSprite, PauseSprite, PlaySprite } from "../assets/pixel-sprites";
 
 type Status = "idle" | "loading" | "playing" | "paused" | "error";
 
@@ -17,6 +17,9 @@ type Props = {
   proxyError: string | null;
   volume: number;
   currentTrack: string | null;
+  streamName: string | null;
+  isFavorite: boolean;
+  onToggleFavorite: () => void;
   onVolumeChange: (v: number) => void;
   onBufferReady: (rb: RollingBuffer) => void;
 };
@@ -28,6 +31,9 @@ const Player = forwardRef<PlayerHandle, Props>(function Player(
     proxyError,
     volume,
     currentTrack,
+    streamName,
+    isFavorite,
+    onToggleFavorite,
     onVolumeChange,
     onBufferReady,
   },
@@ -175,8 +181,21 @@ const Player = forwardRef<PlayerHandle, Props>(function Player(
             {statusLabel(status)}
             {status === "playing" && <span className="inline-block w-1 h-1 bg-signal-500 animate-pulse" />}
           </div>
-          <div className="font-display text-xl text-cream-100 truncate mt-0.5">
-            {station ? station.name.trim() || "Untitled station" : "— nothing pouring yet —"}
+          <div className="mt-0.5 flex items-center gap-2 min-w-0">
+            <div className="font-display text-xl text-cream-100 truncate">
+              {station
+                ? streamName?.trim() || station.name.trim() || "Untitled station"
+                : "— nothing pouring yet —"}
+            </div>
+            {station && (
+              <button
+                onClick={onToggleFavorite}
+                title={isFavorite ? "remove favorite" : "favorite"}
+                className="shrink-0 hover:scale-110 transition-transform"
+              >
+                <HeartSprite filled={isFavorite} size={16} />
+              </button>
+            )}
           </div>
           <div className="font-mono text-xs truncate min-h-[1.1em]">
             {currentTrack ? (
