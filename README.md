@@ -2,7 +2,7 @@
 
 > Listen to radio from around the world. If you hear something you want to keep, retroactively record the last 30 or 60 seconds.
 
-A desktop radio app with a **rolling 60s buffer** — when something cool plays, hit `[` or `]` and you keep the last 30 s / 60 s as a WAV. Coffee-pour pixel aesthetic.
+A desktop radio app with a **rolling 60s buffer** — when something cool plays, hit `[` or `]` and you keep the last 30 s / 60 s as a WAV.
 
 ## Install
 
@@ -109,17 +109,6 @@ glo/
 │   └── App.tsx
 └── package.json
 ```
-
-## Aesthetic notes
-- Palette: espresso → cream gradient (`#0f0a07` → `#f4e8d0`) with crema-orange (`#d97f3c`) accents
-- Inter for body, Pixelify Sans for headers, JetBrains Mono for metadata
-- Pixel sprites only on the player (mug, vinyl, cassette, signal bars, heart)
-- Cream-into-coffee dithered bleed at panel tops, scanlines on the player
-
-## Known limitations
-- WAVs are saved at the `AudioContext`'s sample rate (typically 48 kHz), not the stream's bitrate.
-- The proxy runs on `127.0.0.1` only and blocks obvious-local upstreams to prevent SSRF.
-- No MP3 encoding (WAV only). No accounts / cloud sync. No mobile builds.
 
 ## Network & privacy
 
